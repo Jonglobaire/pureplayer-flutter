@@ -114,7 +114,7 @@ class _SplashScreenState extends State<SplashScreen>
 
               // App Name
               const Text(
-                'Pure Player',
+                'Pure Player 🚀 TEST',
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
