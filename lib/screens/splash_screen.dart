@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/device_info.dart';
 import 'home_screen.dart';
@@ -16,7 +17,7 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   String _deviceInfo = '';
-  bool _navigated = false; // Prevents double navigation
+  bool _navigated = false;
 
   @override
   void initState() {
@@ -39,7 +40,7 @@ class _SplashScreenState extends State<SplashScreen>
     _loadDeviceInfo();
     _animationController.forward();
 
-    // Navigate to home screen after 3 seconds
+    // Navigate after 3 seconds
     Future.delayed(const Duration(seconds: 3), _checkSavedPlaylist);
   }
 
@@ -63,6 +64,12 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _checkSavedPlaylist() async {
     if (!mounted || _navigated) return;
     _navigated = true;
+    
+    // Force landscape orientation after splash
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     
     try {
       final prefs = await SharedPreferences.getInstance();

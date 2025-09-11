@@ -5,20 +5,6 @@ import 'screens/splash_screen.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Force landscape orientation
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
-  
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Force landscape orientation
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
-  
   runApp(const PurePlayerApp());
 }
 
