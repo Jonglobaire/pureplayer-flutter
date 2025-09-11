@@ -81,8 +81,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         fit: BoxFit.contain,
         autoDetectFullscreenDeviceOrientation: true,
         controlsConfiguration: const BetterPlayerControlsConfiguration(
-          showControlsOnInitialize: false,
-          autoHideControls: true,
+          showControls: true,
           controlsHideTime: Duration(seconds: 3),
           enableFullscreen: true,
           enableSkips: true,
