@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/device_info.dart';
 import 'home_screen.dart';
-import 'input_screen.dart';
 import 'input_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -185,48 +183,9 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
             ],
-    
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedUrl = prefs.getString('m3u_url');
-      
-      if (savedUrl != null && savedUrl.isNotEmpty) {
-        debugPrint("✅ SplashScreen: Found saved playlist, navigating to HomeScreen...");
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => HomeScreen(playlistUrl: savedUrl),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            transitionDuration: const Duration(milliseconds: 500),
           ),
-        );
-      } else {
-        debugPrint("✅ SplashScreen: No saved playlist, navigating to InputScreen...");
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const InputScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            transitionDuration: const Duration(milliseconds: 500),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint("❌ Error checking saved playlist: $e");
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const InputScreen()),
-      );
-    }
+        ),
+      ),
+    );
   }
 }
-
-              const Text(
-                'Pure Player',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
