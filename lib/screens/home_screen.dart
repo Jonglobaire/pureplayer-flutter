@@ -18,15 +18,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<Channel> _allChannels = [];
   bool _isLoading = false;
   String? _currentPlaylistUrl;
-  
-  // Focus management for D-Pad navigation
-  int _focusedRow = 0;
-  int _focusedCol = 0;
-  List<List<FocusNode>>? _focusNodes;
-  
-  // Animation controllers for button interactions
-  List<AnimationController>? _scaleControllers;
-  List<Animation<double>>? _scaleAnimations;
+  String _playlistName = '';
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
@@ -38,70 +32,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       DeviceOrientation.landscapeRight,
     ]);
 
-    // Initialize focus nodes for 2x3 grid
-    final focusNodes = <List<FocusNode>>[];
-    for (int row = 0; row < 2; row++) {
-      focusNodes.add([]);
-      for (int col = 0; col < 3; col++) {
-        focusNodes[row].add(FocusNode());
-      }
-    }
-    _focusNodes = focusNodes;
-    
-    // Initialize animation controllers
-    final controllers = List.generate(6, (index) {
-      return AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 200),
-        lowerBound: 0.95,
-        upperBound: 1.1,
-      )..value = 1.0;
-    });
-    _scaleControllers = controllers;
-    debugPrint("✅ _scaleControllers initialized with ${controllers.length} controllers");
-    
-    // Initialize scale animations
-    final animations = controllers.map((controller) {
-      return Tween<double>(
-        begin: 0.95,
-        end: 1.1,
-      ).animate(CurvedAnimation(
-        parent: controller,
-        curve: Curves.easeInOut,
-      ));
-    }).toList();
-    _scaleAnimations = animations;
-    
-    // Set up focus listeners
-    final focusNodesRef = _focusNodes;
-    if (focusNodesRef == null) return;
-    
-    for (int row = 0; row < 2; row++) {
-      for (int col = 0; col < 3; col++) {
-        final buttonIndex = row * 3 + col;
-        focusNodesRef[row][col].addListener(() {
-          if (focusNodesRef[row][col].hasFocus) {
-            _scaleControllers?[buttonIndex]?.forward();
-            if (mounted) setState(() {
-              _focusedRow = row;
-              _focusedCol = col;
-            });
-          } else {
-            _scaleControllers?[buttonIndex]?.reverse();
-          }
-        });
-      }
-    }
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurveTween(curve: Curves.easeInOut).animate(_fadeController),
+    );
     
     // Load initial playlist if provided
     if (widget.initialPlaylistUrl != null && widget.initialPlaylistUrl!.isNotEmpty) {
       _loadPlaylist(widget.initialPlaylistUrl!);
+    } else {
+      setState(() {
+        _playlistName = 'No Playlist Loaded';
+      });
     }
     
-    // Set initial focus
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNodes?[0][0].requestFocus();
-    });
+    _fadeController.forward();
   }
 
   Future<void> _loadPlaylist(String url) async {
@@ -114,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       setState(() {
         _allChannels = channels;
         _currentPlaylistUrl = url;
+        _playlistName = _getShortUrl(url);
         _isLoading = false;
       });
       
@@ -122,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       await prefs.setString('playlistUrl', url);
       
       _showSnackBar('Playlist loaded successfully! ${channels.length} channels found');
+      debugPrint('✅ Loaded ${channels.length} channels');
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -140,61 +90,67 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
+          backgroundColor: Colors.grey[900],
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.playlist_play, color: Color(0xFFE50914), size: 28),
               SizedBox(width: 12),
-              Text(
-                'CHANGE PLAYLIST', 
-                style: TextStyle(
-                  color: Colors.white, 
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
+              Flexible(
+                child: Text(
+                  'Change Playlist', 
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          content: SizedBox(
-            width: 400,
-            child: TextField(
-              controller: urlController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'M3U PLAYLIST URL',
-                labelStyle: const TextStyle(color: Colors.white70),
-                hintText: 'https://example.com/playlist.m3u',
-                hintStyle: const TextStyle(color: Colors.white38),
-                prefixIcon: const Icon(Icons.link, color: Color(0xFFE50914)),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Colors.white30),
+          content: LayoutBuilder(
+            builder: (context, constraints) {
+              return SizedBox(
+                width: constraints.maxWidth > 400 ? 400 : constraints.maxWidth * 0.9,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: urlController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: 'M3U Playlist URL',
+                        labelStyle: const TextStyle(color: Colors.white70),
+                        hintText: 'https://example.com/playlist.m3u',
+                        hintStyle: const TextStyle(color: Colors.white38),
+                        prefixIcon: const Icon(Icons.link, color: Color(0xFFE50914)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.white30),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE50914), width: 2),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.white30),
+                        ),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.05),
+                      ),
+                      maxLines: 3,
+                    ),
+                  ],
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFFE50914), width: 2),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Colors.white30),
-                ),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
-              ),
-              maxLines: 3,
-            ),
+              );
+            },
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('CANCEL', style: TextStyle(color: Colors.white70)),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE50914),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE50914)),
               onPressed: () {
                 final url = urlController.text.trim();
                 if (url.isNotEmpty) {
@@ -202,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   _loadPlaylist(url);
                 }
               },
-              child: const Text('LOAD PLAYLIST', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('Load Playlist', style: TextStyle(color: Colors.white)),
             ),
           ],
         );
@@ -213,7 +169,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(message),
         backgroundColor: isError ? Colors.red[700] : const Color(0xFFE50914),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -227,18 +183,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
+          backgroundColor: Colors.grey[900],
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.error_outline, color: Colors.red, size: 28),
               const SizedBox(width: 12),
-              Text(
-                title.toUpperCase(), 
-                style: const TextStyle(
-                  color: Colors.white, 
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
+              Flexible(
+                child: Text(
+                  title, 
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -246,6 +202,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           content: Text(
             message, 
             style: const TextStyle(color: Colors.white70, fontSize: 16),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 3,
           ),
           actions: [
             TextButton(
@@ -253,20 +211,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 Navigator.of(context).pop();
                 _showChangePlaylistDialog();
               },
-              child: const Text('CHANGE PLAYLIST', style: TextStyle(color: Colors.orange)),
+              child: const Text('Change Playlist', style: TextStyle(color: Colors.orange)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE50914),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE50914)),
               onPressed: () {
                 Navigator.of(context).pop();
                 if (_currentPlaylistUrl != null) {
                   _loadPlaylist(_currentPlaylistUrl!);
                 }
               },
-              child: const Text('RETRY', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('Retry', style: TextStyle(color: Colors.white)),
             ),
           ],
         );
@@ -316,450 +271,489 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         pageBuilder: (context, animation, secondaryAnimation) => 
           ChannelsScreen(channels: channels, title: title),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(opacity: animation, child: child);
+          return SlideTransition(
+            position: animation.drive(
+              Tween(begin: const Offset(1.0, 0.0), end: Offset.zero)
+                .chain(CurveTween(curve: Curves.easeInOut)),
+            ),
+            child: child,
+          );
         },
-        transitionDuration: const Duration(milliseconds: 300),
+        transitionDuration: const Duration(milliseconds: 500),
       ),
     );
   }
 
-  void _handleButtonPress(int row, int col) {
-    final buttonIndex = row * 3 + col;
-    
-    final controller = _scaleControllers?[buttonIndex];
-    if (controller == null) return;
-    
-    // Press animation
-    controller.forward().then((_) {
-      controller.reverse();
-    });
-
-    // Handle navigation based on button position
-    if (row == 0) {
-      // Top row: Live TV, Movies, Series
-      switch (col) {
-        case 0:
-          _navigateToChannels('live', 'Live TV');
-          break;
-        case 1:
-          _navigateToChannels('movies', 'Movies');
-          break;
-        case 2:
-          _navigateToChannels('series', 'TV Series');
-          break;
-      }
-    } else {
-      // Bottom row: Reload, Settings, Exit
-      switch (col) {
-        case 0:
-          if (_currentPlaylistUrl != null) {
-            _loadPlaylist(_currentPlaylistUrl!);
-          } else {
-            _showChangePlaylistDialog();
-          }
-          break;
-        case 1:
-          _showSnackBar('Settings coming soon!');
-          break;
-        case 2:
-          SystemNavigator.pop();
-          break;
-      }
+  String _getShortUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      return uri.host.length > 20 ? '${uri.host.substring(0, 20)}...' : uri.host;
+    } catch (e) {
+      return url.length > 25 ? '${url.substring(0, 25)}...' : url;
     }
   }
 
-  Widget _buildGridButton({
-    required String title,
-    required IconData icon,
-    required int row,
-    required int col,
-    required bool isEnabled,
-  }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Check if controllers are initialized
-        final scaleControllers = _scaleControllers;
-        final scaleAnimations = _scaleAnimations;
-        final focusNodes = _focusNodes;
-        
-        if (scaleControllers == null || scaleAnimations == null || focusNodes == null) {
-          return SizedBox(
-            width: MediaQuery.of(context).size.width * 0.25,
-            height: MediaQuery.of(context).size.width * 0.25 * 0.75,
-            child: const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFE50914),
-                strokeWidth: 2,
-              ),
-            ),
-          );
-        }
-        
-        final screenWidth = MediaQuery.of(context).size.width;
-        final screenHeight = MediaQuery.of(context).size.height;
-        
-        // Button dimensions: 25% of screen width, 4:3 ratio
-        final buttonWidth = screenWidth * 0.25;
-        final buttonHeight = buttonWidth * 0.75;
-        
-        // Font size: 4-5% of screen height
-        final fontSize = screenHeight * 0.045;
-        final iconSize = fontSize * 1.2;
-
-        return Focus(
-          focusNode: focusNodes[row][col],
-          onKeyEvent: (node, event) {
-            if (event is KeyDownEvent) {
-              switch (event.logicalKey) {
-                case LogicalKeyboardKey.arrowLeft:
-                  if (col > 0) {
-                    focusNodes[row][col - 1].requestFocus();
-                  }
-                  return KeyEventResult.handled;
-                case LogicalKeyboardKey.arrowRight:
-                  if (col < 2) {
-                    focusNodes[row][col + 1].requestFocus();
-                  }
-                  return KeyEventResult.handled;
-                case LogicalKeyboardKey.arrowUp:
-                  if (row > 0) {
-                    focusNodes[row - 1][col].requestFocus();
-                  }
-                  return KeyEventResult.handled;
-                case LogicalKeyboardKey.arrowDown:
-                  if (row < 1) {
-                    focusNodes[row + 1][col].requestFocus();
-                  }
-                  return KeyEventResult.handled;
-                case LogicalKeyboardKey.enter:
-                case LogicalKeyboardKey.select:
-                  if (isEnabled) {
-                    _handleButtonPress(row, col);
-                  }
-                  return KeyEventResult.handled;
-              }
-            }
-            return KeyEventResult.ignored;
-          },
-          child: AnimatedBuilder(
-            animation: scaleAnimations[row * 3 + col],
-            builder: (context, child) {
-              final buttonIndex = row * 3 + col;
-              final scale = scaleAnimations[buttonIndex].value;
-              final isFocused = focusNodes[row][col].hasFocus;
-              
-              return Transform.scale(
-                scale: scale,
-                child: GestureDetector(
-                  onTap: isEnabled ? () => _handleButtonPress(row, col) : null,
-                  onTapDown: (_) {
-                    if (isEnabled) {
-                      scaleControllers[buttonIndex].forward();
-                    }
-                  },
-                  onTapUp: (_) {
-                    if (isEnabled) {
-                      scaleControllers[buttonIndex].reverse();
-                    }
-                  },
-                  onTapCancel: () {
-                    if (isEnabled) {
-                      scaleControllers[buttonIndex].reverse();
-                    }
-                  },
-                  child: Container(
-                    width: buttonWidth,
-                    height: buttonHeight,
-                    decoration: BoxDecoration(
-                      color: isEnabled ? const Color(0xFFE50914) : const Color(0xFF666666),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: isFocused && isEnabled ? [
-                        BoxShadow(
-                          color: const Color(0xFFE50914).withOpacity(0.5),
-                          blurRadius: 15,
-                          spreadRadius: 2,
-                        ),
-                      ] : null,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          icon,
-                          color: isEnabled ? Colors.white : Colors.white54,
-                          size: iconSize,
-                        ),
-                        SizedBox(height: screenHeight * 0.01),
-                        Text(
-                          title,
-                          style: TextStyle(
-                            color: isEnabled ? Colors.white : Colors.white54,
-                            fontSize: fontSize,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
+  void _exitApp() {
+    SystemNavigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
     // Show loading screen while fetching playlist
     if (_isLoading) {
-      return const LoadingScreen();
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: const Center(
+          child: CircularProgressIndicator(color: Color(0xFFE50914)),
+        ),
+      );
     }
-
+    
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final screenWidth = constraints.maxWidth;
-          final screenHeight = constraints.maxHeight;
-          
-          // Calculate spacing
-          final horizontalSpacing = screenWidth * 0.035; // 3.5% of screen width
-          final verticalSpacing = screenHeight * 0.05; // 5% of screen height
-          
-          final hasPlaylist = _allChannels.isNotEmpty;
-          final liveChannels = _getChannelsByType('live');
-          final movieChannels = _getChannelsByType('movies');
-          final seriesChannels = _getChannelsByType('series');
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.black,
+              Color(0xFF1A1A1A),
+              Colors.black,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return _buildResponsiveContent(constraints);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-          return Center(
+  Widget _buildResponsiveContent(BoxConstraints constraints) {
+    // Get screen dimensions
+    final screenWidth = constraints.maxWidth;
+    final screenHeight = constraints.maxHeight;
+    
+    // Calculate responsive button dimensions
+    final buttonWidth = screenWidth * 0.25; // 25% of screen width
+    final buttonHeight = buttonWidth * 0.75; // 4:3 aspect ratio
+    final horizontalSpacing = screenWidth * 0.035; // 3.5% horizontal spacing
+    final verticalSpacing = screenHeight * 0.05; // 5% vertical spacing
+    
+    // Calculate responsive text and icon sizes
+    final iconSize = buttonHeight * 0.3; // 30% of button height
+    final fontSize = buttonHeight * 0.15; // 15% of button height
+    
+    return SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: screenWidth * 0.02,
+          vertical: screenHeight * 0.02,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Header
+            _buildHeader(screenWidth, screenHeight),
+            SizedBox(height: verticalSpacing),
+            
+            // 2x3 Grid Layout - Centered
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Row 1: Live TV, Movies, Series
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildResponsiveButton(
+                      'Live TV',
+                      Icons.live_tv,
+                      const Color(0xFFE50914),
+                      _getChannelsByType('live').isNotEmpty ? () => _navigateToChannels('live', 'Live TV') : null,
+                      buttonWidth,
+                      buttonHeight,
+                      iconSize,
+                      fontSize,
+                      0, // button index for animations
+                    ),
+                    SizedBox(width: horizontalSpacing),
+                    _buildResponsiveButton(
+                      'Movies',
+                      Icons.movie,
+                      const Color(0xFF1976D2),
+                      _getChannelsByType('movies').isNotEmpty ? () => _navigateToChannels('movies', 'Movies') : null,
+                      buttonWidth,
+                      buttonHeight,
+                      iconSize,
+                      fontSize,
+                      1, // button index for animations
+                    ),
+                    SizedBox(width: horizontalSpacing),
+                    _buildResponsiveButton(
+                      'Series',
+                      Icons.video_library,
+                      const Color(0xFF388E3C),
+                      _getChannelsByType('series').isNotEmpty ? () => _navigateToChannels('series', 'TV Series') : null,
+                      buttonWidth,
+                      buttonHeight,
+                      iconSize,
+                      fontSize,
+                      2, // button index for animations
+                    ),
+                  ],
+                ),
+                SizedBox(height: verticalSpacing),
+                
+                // Row 2: Reload, Settings, Exit
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildResponsiveButton(
+                      'Reload',
+                      Icons.refresh,
+                      const Color(0xFFFF9800),
+                      _allChannels.isNotEmpty && _currentPlaylistUrl != null ? () => _loadPlaylist(_currentPlaylistUrl!) : null,
+                      buttonWidth,
+                      buttonHeight,
+                      iconSize,
+                      fontSize,
+                      3, // button index for animations
+                    ),
+                    SizedBox(width: horizontalSpacing),
+                    _buildResponsiveButton(
+                      'Settings',
+                      Icons.settings,
+                      const Color(0xFF607D8B),
+                      () => _showSnackBar('Settings coming soon!'),
+                      buttonWidth,
+                      buttonHeight,
+                      iconSize,
+                      fontSize,
+                      4, // button index for animations
+                    ),
+                    SizedBox(width: horizontalSpacing),
+                    _buildResponsiveButton(
+                      'Exit',
+                      Icons.exit_to_app,
+                      const Color(0xFFF44336),
+                      _exitApp,
+                      buttonWidth,
+                      buttonHeight,
+                      iconSize,
+                      fontSize,
+                      5, // button index for animations
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            SizedBox(height: verticalSpacing),
+            
+            // Playlist info at bottom
+            _buildPlaylistInfo(screenWidth, screenHeight),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(double screenWidth, double screenHeight) {
+    final logoSize = (screenWidth * 0.06).clamp(40.0, 80.0);
+    final titleSize = (screenWidth * 0.03).clamp(18.0, 28.0);
+    final subtitleSize = (screenWidth * 0.018).clamp(12.0, 16.0);
+    
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: logoSize,
+          height: logoSize,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE50914),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFE50914).withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              'P',
+              style: TextStyle(
+                fontSize: logoSize * 0.5,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: screenWidth * 0.015),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Pure Player',
+                style: TextStyle(
+                  fontSize: titleSize,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                'Professional Streaming Experience',
+                style: TextStyle(
+                  fontSize: subtitleSize,
+                  color: Colors.white70,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResponsiveButton(
+    String title,
+    IconData icon,
+    Color color,
+    VoidCallback? onTap,
+    double width,
+    double height,
+    double iconSize,
+    double fontSize,
+    int buttonIndex,
+  ) {
+    final isEnabled = onTap != null;
+    
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  color.withOpacity(isEnabled ? 0.9 : 0.3),
+                  color.withOpacity(isEnabled ? 0.7 : 0.2),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: isEnabled ? [
+                BoxShadow(
+                  color: color.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ] : null,
+            ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Top row: Live TV, Movies, Series
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildGridButton(
-                      title: 'LIVE TV',
-                      icon: Icons.live_tv,
-                      row: 0,
-                      col: 0,
-                      isEnabled: hasPlaylist && liveChannels.isNotEmpty,
-                    ),
-                    SizedBox(width: horizontalSpacing),
-                    _buildGridButton(
-                      title: 'MOVIES',
-                      icon: Icons.movie,
-                      row: 0,
-                      col: 1,
-                      isEnabled: hasPlaylist && movieChannels.isNotEmpty,
-                    ),
-                    SizedBox(width: horizontalSpacing),
-                    _buildGridButton(
-                      title: 'SERIES',
-                      icon: Icons.video_library,
-                      row: 0,
-                      col: 2,
-                      isEnabled: hasPlaylist && seriesChannels.isNotEmpty,
-                    ),
-                  ],
+                Icon(
+                  icon,
+                  color: isEnabled ? Colors.white : Colors.white54,
+                  size: iconSize,
                 ),
-                
-                SizedBox(height: verticalSpacing),
-                
-                // Bottom row: Reload, Settings, Exit
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildGridButton(
-                      title: 'RELOAD',
-                      icon: Icons.refresh,
-                      row: 1,
-                      col: 0,
-                      isEnabled: true, // Always enabled - opens playlist dialog if no playlist
+                SizedBox(height: height * 0.08),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    title.toUpperCase(),
+                    style: TextStyle(
+                      color: isEnabled ? Colors.white : Colors.white54,
+                      fontSize: fontSize,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
                     ),
-                    SizedBox(width: horizontalSpacing),
-                    _buildGridButton(
-                      title: 'SETTINGS',
-                      icon: Icons.settings,
-                      row: 1,
-                      col: 1,
-                      isEnabled: true,
-                    ),
-                    SizedBox(width: horizontalSpacing),
-                    _buildGridButton(
-                      title: 'EXIT',
-                      icon: Icons.exit_to_app,
-                      row: 1,
-                      col: 2,
-                      isEnabled: true,
-                    ),
-                  ],
-                ),
-                
-                // Playlist info at bottom
-                if (!hasPlaylist) ...[
-                  SizedBox(height: screenHeight * 0.08),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth * 0.04,
-                      vertical: screenHeight * 0.02,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'NO PLAYLIST LOADED',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: screenHeight * 0.025,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        SizedBox(height: screenHeight * 0.01),
-                        GestureDetector(
-                          onTap: _showChangePlaylistDialog,
-                          child: Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: screenWidth * 0.03,
-                              vertical: screenHeight * 0.015,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE50914),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'CHANGE PLAYLIST',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: screenHeight * 0.02,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.0,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    textAlign: TextAlign.center,
                   ),
-                ],
+                ),
               ],
             ),
-          );
-        },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaylistInfo(double screenWidth, double screenHeight) {
+    final liveChannels = _getChannelsByType('live');
+    final movieChannels = _getChannelsByType('movies');
+    final seriesChannels = _getChannelsByType('series');
+    final hasPlaylist = _allChannels.isNotEmpty;
+    
+    return Container(
+      constraints: BoxConstraints(maxWidth: screenWidth * 0.8),
+      padding: EdgeInsets.all(screenWidth * 0.02),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Playlist Status',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: (screenWidth * 0.02).clamp(14.0, 18.0),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          SizedBox(height: screenHeight * 0.015),
+          if (hasPlaylist) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.tv, color: const Color(0xFFE50914), size: screenWidth * 0.015),
+                SizedBox(width: screenWidth * 0.01),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'Total: ${_allChannels.length} | Live: ${liveChannels.length} | Movies: ${movieChannels.length} | Series: ${seriesChannels.length}',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: (screenWidth * 0.015).clamp(10.0, 14.0),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: screenHeight * 0.01),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.link, color: const Color(0xFFE50914), size: screenWidth * 0.015),
+                SizedBox(width: screenWidth * 0.01),
+                Flexible(
+                  child: Text(
+                    _playlistName,
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: (screenWidth * 0.015).clamp(10.0, 14.0),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: screenHeight * 0.015),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildActionButton(
+                  'Change Playlist',
+                  Icons.playlist_play,
+                  const Color(0xFF9C27B0),
+                  _showChangePlaylistDialog,
+                  screenWidth,
+                ),
+                SizedBox(width: screenWidth * 0.02),
+                _buildActionButton(
+                  'Settings',
+                  Icons.settings,
+                  const Color(0xFF607D8B),
+                  () => _showSnackBar('Settings coming soon!'),
+                  screenWidth,
+                ),
+              ],
+            ),
+          ] else ...[
+            Text(
+              'No playlist loaded',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: (screenWidth * 0.018).clamp(12.0, 16.0),
+              ),
+            ),
+            SizedBox(height: screenHeight * 0.015),
+            _buildActionButton(
+              'Load Playlist',
+              Icons.playlist_play,
+              const Color(0xFFE50914),
+              _showChangePlaylistDialog,
+              screenWidth,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton(String title, IconData icon, Color color, VoidCallback onTap, double screenWidth) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: screenWidth * 0.02,
+            vertical: screenWidth * 0.01,
+          ),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withOpacity(0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: color,
+                size: screenWidth * 0.02,
+              ),
+              SizedBox(width: screenWidth * 0.01),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: (screenWidth * 0.015).clamp(10.0, 14.0),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   @override
   void dispose() {
-    // Dispose animation controllers
-    _scaleControllers?.forEach((controller) {
-      controller.dispose();
-    });
-    
-    // Dispose all focus nodes
-    final focusNodes = _focusNodes;
-    if (focusNodes != null) {
-      for (int row = 0; row < focusNodes.length; row++) {
-        for (int col = 0; col < focusNodes[row].length; col++) {
-          focusNodes[row][col].dispose();
-        }
-      }
-    }
-    
+    _fadeController.dispose();
     super.dispose();
-  }
-}
-
-// Loading Screen Widget
-class LoadingScreen extends StatelessWidget {
-  const LoadingScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final screenWidth = constraints.maxWidth;
-          final screenHeight = constraints.maxHeight;
-          
-          // Logo size: 20% of screen width
-          final logoSize = screenWidth * 0.2;
-          
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // App Logo
-                Container(
-                  width: logoSize,
-                  height: logoSize,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE50914),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFE50914).withOpacity(0.5),
-                        blurRadius: 20,
-                        spreadRadius: 5,
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      'P',
-                      style: TextStyle(
-                        fontSize: logoSize * 0.5,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-                
-                SizedBox(height: screenHeight * 0.08),
-                
-                // Loading Spinner
-                const CircularProgressIndicator(
-                  color: Color(0xFFE50914),
-                  strokeWidth: 4,
-                ),
-                
-                SizedBox(height: screenHeight * 0.04),
-                
-                // Loading Text
-                Text(
-                  'SERVER CONTENT LOADING...',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: screenHeight * 0.03,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2.0,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
   }
 }
