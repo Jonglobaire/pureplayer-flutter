@@ -11,6 +11,14 @@ void main() {
     DeviceOrientation.landscapeRight,
   ]);
   
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Force landscape orientation
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+  
   runApp(const PurePlayerApp());
 }
 
@@ -32,6 +40,16 @@ class PurePlayerApp extends StatelessWidget {
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
           systemOverlayStyle: SystemUiOverlayStyle.light,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFE50914),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(

@@ -1,68 +1,80 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/channel.dart';
 import '../services/m3u_parser.dart';
 import 'player_screen.dart';
+import 'input_screen.dart';
+import 'channels_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final String playlistUrl;
+
+  const HomeScreen({super.key, required this.playlistUrl});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  final TextEditingController _urlController = TextEditingController();
-  List<Channel> _channels = [];
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  List<Channel> _allChannels = [];
   bool _isLoading = false;
-  String? _lastLoadedUrl;
-  
-  // Group channels by their group property
-  Map<String, List<Channel>> get _groupedChannels {
-    final grouped = <String, List<Channel>>{};
-    for (final channel in _channels) {
-      grouped.putIfAbsent(channel.group, () => []).add(channel);
-    }
-    return grouped;
-  }
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    // Pre-fill with a sample URL for testing
-    _urlController.text = '';
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
+    );
+    
+    _loadPlaylist();
+    _fadeController.forward();
   }
 
   Future<void> _loadPlaylist() async {
-    final url = _urlController.text.trim();
-    
-    if (url.isEmpty) {
-      _showSnackBar('Please enter a M3U URL', isError: true);
-      return;
-    }
-
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final channels = await M3UParser.fetchAndParseM3U(url);
+      final channels = await M3UParser.fetchAndParseM3U(widget.playlistUrl);
       setState(() {
-        _channels = channels;
+        _allChannels = channels;
         _isLoading = false;
-        _lastLoadedUrl = url;
       });
-      
-      if (channels.isEmpty) {
-        _showSnackBar('No channels found in the playlist', isError: true);
-      } else {
-        _showSnackBar('Successfully loaded ${channels.length} channels');
-      }
+      debugPrint('✅ Loaded ${channels.length} channels');
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
-      _showSnackBar('Failed to load playlist: ${e.toString().replaceAll('Exception: ', '')}', isError: true);
+      _showSnackBar('Failed to load playlist: ${e.toString()}', isError: true);
     }
+  }
+
+  Future<void> _changePlaylist() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('m3u_url');
+    
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => const InputScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: animation.drive(
+              Tween(begin: const Offset(-1.0, 0.0), end: Offset.zero)
+                .chain(CurveTween(curve: Curves.easeInOut)),
+            ),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 600),
+      ),
+    );
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
@@ -76,319 +88,354 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _playChannel(Channel channel) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => PlayerScreen(channel: channel),
-      ),
-    );
+  List<Channel> _getChannelsByType(String type) {
+    switch (type.toLowerCase()) {
+      case 'live':
+        return _allChannels.where((channel) => 
+          !channel.group.toLowerCase().contains('movie') &&
+          !channel.group.toLowerCase().contains('series') &&
+          !channel.group.toLowerCase().contains('vod')
+        ).toList();
+      case 'movies':
+        return _allChannels.where((channel) => 
+          channel.group.toLowerCase().contains('movie') ||
+          channel.group.toLowerCase().contains('film') ||
+          channel.group.toLowerCase().contains('cinema')
+        ).toList();
+      case 'series':
+        return _allChannels.where((channel) => 
+          channel.group.toLowerCase().contains('series') ||
+          channel.group.toLowerCase().contains('tv show') ||
+          channel.group.toLowerCase().contains('drama')
+        ).toList();
+      default:
+        return _allChannels;
+    }
   }
 
-  void _clearPlaylist() {
-    setState(() {
-      _channels = [];
-      _lastLoadedUrl = null;
-    });
-    _showSnackBar('Playlist cleared');
+  void _navigateToChannels(String type, String title) {
+    final channels = _getChannelsByType(type);
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => 
+          ChannelsScreen(channels: channels, title: title),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: animation.drive(
+              Tween(begin: const Offset(1.0, 0.0), end: Offset.zero)
+                .chain(CurveTween(curve: Curves.easeInOut)),
+            ),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 500),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Pure Player',
-          style: TextStyle(fontWeight: FontWeight.bold),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.black,
+              Color(0xFF1A1A1A),
+              Colors.black,
+            ],
+          ),
         ),
-        backgroundColor: Colors.black,
-        actions: [
-          if (_channels.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.clear_all),
-              onPressed: _clearPlaylist,
-              tooltip: 'Clear Playlist',
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // URL Input Section
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.grey[800]!),
-            ),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Load M3U Playlist',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _urlController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'M3U Playlist URL',
-                    labelStyle: const TextStyle(color: Colors.grey),
-                    hintText: 'https://example.com/playlist.m3u',
-                    hintStyle: const TextStyle(color: Colors.grey),
-                    prefixIcon: const Icon(Icons.link, color: Color(0xFFE50914)),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Colors.grey),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Color(0xFFE50914)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Colors.grey),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _loadPlaylist,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFE50914),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      elevation: 3,
-                    ),
-                    icon: _isLoading 
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
+                // Header
+                Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE50914),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'P',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
-                          )
-                        : const Icon(Icons.download_rounded),
-                    label: Text(
-                      _isLoading ? 'Loading...' : 'Load Playlist',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-                if (_lastLoadedUrl != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'Last loaded: ${_lastLoadedUrl!.length > 50 ? '${_lastLoadedUrl!.substring(0, 50)}...' : _lastLoadedUrl!}',
-                    style: const TextStyle(
-                      color: Colors.grey,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          
-          // Channels List
-          Expanded(
-            child: _channels.isEmpty
-                ? _buildEmptyState()
-                : _buildChannelsList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(50),
-            ),
-            child: const Icon(
-              Icons.tv_off_rounded,
-              size: 50,
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'No playlist loaded',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Enter a M3U playlist URL above to get started',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 30),
-          Container(
-            padding: const EdgeInsets.all(16),
-            margin: const EdgeInsets.symmetric(horizontal: 32),
-            decoration: BoxDecoration(
-              color: Colors.grey[900],
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey[800]!),
-            ),
-            child: const Column(
-              children: [
-                Icon(
-                  Icons.info_outline,
-                  color: Color(0xFFE50914),
-                  size: 24,
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Tip: You can find free IPTV M3U playlists online',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChannelsList() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: _groupedChannels.length,
-      itemBuilder: (context, groupIndex) {
-        final groupName = _groupedChannels.keys.elementAt(groupIndex);
-        final groupChannels = _groupedChannels[groupName]!;
-        
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: Colors.grey[900],
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: Colors.grey[800]!),
-          ),
-          child: Theme(
-            data: Theme.of(context).copyWith(
-              dividerColor: Colors.transparent,
-            ),
-            child: ExpansionTile(
-              tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              childrenPadding: const EdgeInsets.only(bottom: 8),
-              title: Text(
-                groupName,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.white,
-                ),
-              ),
-              subtitle: Text(
-                '${groupChannels.length} channels',
-                style: const TextStyle(color: Colors.grey),
-              ),
-              iconColor: const Color(0xFFE50914),
-              collapsedIconColor: Colors.grey,
-              children: groupChannels.map((channel) {
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[850],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: channel.logo.isNotEmpty
-                          ? Image.network(
-                              channel.logo,
-                              width: 50,
-                              height: 50,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  width: 50,
-                                  height: 50,
-                                  color: Colors.grey[700],
-                                  child: const Icon(Icons.tv, color: Colors.white),
-                                );
-                              },
-                            )
-                          : Container(
-                              width: 50,
-                              height: 50,
-                              color: Colors.grey[700],
-                              child: const Icon(Icons.tv, color: Colors.white),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Pure Player',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
-                    ),
-                    title: Text(
-                      channel.name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
+                            Text(
+                              'Your Entertainment Hub',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    subtitle: Text(
-                      channel.group,
-                      style: const TextStyle(color: Colors.grey),
-                    ),
-                    trailing: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE50914),
-                        borderRadius: BorderRadius.circular(20),
+                      IconButton(
+                        onPressed: _changePlaylist,
+                        icon: const Icon(Icons.settings, color: Colors.white70),
+                        tooltip: 'Change Playlist',
                       ),
-                      child: const Icon(
-                        Icons.play_arrow,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                    onTap: () => _playChannel(channel),
+                    ],
                   ),
-                );
-              }).toList(),
+                ),
+
+                // Main Content
+                Expanded(
+                  child: _isLoading
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(color: Color(0xFFE50914)),
+                              SizedBox(height: 16),
+                              Text(
+                                'Loading your content...',
+                                style: TextStyle(color: Colors.white70, fontSize: 16),
+                              ),
+                            ],
+                          ),
+                        )
+                      : _buildMainMenu(),
+                ),
+              ],
             ),
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMainMenu() {
+    final liveChannels = _getChannelsByType('live');
+    final movieChannels = _getChannelsByType('movies');
+    final seriesChannels = _getChannelsByType('series');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: Column(
+        children: [
+          // Stats Row
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatItem('Total Channels', '${_allChannels.length}', Icons.tv),
+                _buildStatItem('Live TV', '${liveChannels.length}', Icons.live_tv),
+                _buildStatItem('Movies', '${movieChannels.length}', Icons.movie),
+                _buildStatItem('Series', '${seriesChannels.length}', Icons.video_library),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // Menu Buttons
+          Expanded(
+            child: GridView.count(
+              crossAxisCount: 2,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 1.2,
+              children: [
+                _buildMenuButton(
+                  'Live TV',
+                  Icons.live_tv,
+                  '${liveChannels.length} channels',
+                  const Color(0xFFE50914),
+                  () => _navigateToChannels('live', 'Live TV'),
+                ),
+                _buildMenuButton(
+                  'Movies',
+                  Icons.movie,
+                  '${movieChannels.length} movies',
+                  const Color(0xFF1976D2),
+                  () => _navigateToChannels('movies', 'Movies'),
+                ),
+                _buildMenuButton(
+                  'Series',
+                  Icons.video_library,
+                  '${seriesChannels.length} series',
+                  const Color(0xFF388E3C),
+                  () => _navigateToChannels('series', 'TV Series'),
+                ),
+                _buildMenuButton(
+                  'Reload',
+                  Icons.refresh,
+                  'Update playlist',
+                  const Color(0xFFFF9800),
+                  _loadPlaylist,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Bottom Actions
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _changePlaylist,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    side: const BorderSide(color: Colors.white30),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  icon: const Icon(Icons.playlist_play),
+                  label: const Text('Change Playlist'),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  icon: const Icon(Icons.exit_to_app),
+                  label: const Text('Exit'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: const Color(0xFFE50914), size: 24),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMenuButton(
+    String title,
+    IconData icon,
+    String subtitle,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color.withOpacity(0.8),
+                color.withOpacity(0.6),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: Colors.white, size: 36),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
   @override
   void dispose() {
-    _urlController.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 }

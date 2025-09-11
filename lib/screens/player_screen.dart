@@ -79,6 +79,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
         autoPlay: true,
         handleLifecycle: true,
         aspectRatio: 16 / 9,
+        fit: BoxFit.contain,
+        looping: false,
+        fullScreenByDefault: false,
+        allowedScreenSleep: false,
+        autoDetectFullscreenDeviceOrientation: true,
+        deviceOrientationsOnFullScreen: const [
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ],
+        deviceOrientationsAfterFullScreen: const [
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ],
         errorBuilder: (context, errorMessage) {
           debugPrint("❌ BetterPlayer Error: $errorMessage");
           return Center(
@@ -92,6 +105,33 @@ class _PlayerScreenState extends State<PlayerScreen> {
           debugPrint("🎥 Player Event: ${event.betterPlayerEventType} - ${event.parameters}");
           _handlePlayerEvent(event);
         },
+        controlsConfiguration: const BetterPlayerControlsConfiguration(
+          enableFullscreen: true,
+          enablePip: true,
+          enablePlayPause: true,
+          enableMute: true,
+          enableProgressBar: true,
+          enableProgressText: true,
+          enableRetry: true,
+          showControlsOnInitialize: true,
+          controlBarColor: Colors.black54,
+          progressBarPlayedColor: Color(0xFFE50914),
+          progressBarHandleColor: Color(0xFFE50914),
+          loadingColor: Color(0xFFE50914),
+          enableSubtitles: true,
+          enableAudioTracks: true,
+          showControls: true,
+          enableQualities: true,
+          controlsHideTime: Duration(seconds: 3),
+        ),
+        placeholder: Container(
+          color: Colors.black,
+          child: const Center(
+            child: CircularProgressIndicator(color: Color(0xFFE50914)),
+          ),
+        ),
+        showPlaceholderUntilPlay: true,
+        placeholderOnTop: false,
       );
 
       _betterPlayerController = BetterPlayerController(
@@ -753,7 +793,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     debugPrint('🗑️ PlayerScreen: Disposing...');
     _disposeController();
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    // Keep landscape orientation
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     super.dispose();
   }
 }
