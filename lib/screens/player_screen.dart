@@ -510,6 +510,42 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  void _showErrorDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red, size: 28),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Text(message, style: const TextStyle(fontSize: 16)),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                print("🔧 Report Issue clicked: $message");
+              },
+              child: const Text("Report Issue"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _initializePlayer(); // retry player init
+              },
+              child: const Text("Retry"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showBufferingSnackBar() {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
