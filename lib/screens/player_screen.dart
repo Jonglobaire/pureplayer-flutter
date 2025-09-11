@@ -76,53 +76,39 @@ class _PlayerScreenState extends State<PlayerScreen> {
       );
 
       final betterPlayerConfiguration = BetterPlayerConfiguration(
-        aspectRatio: 16 / 9,
-        fit: BoxFit.contain,
         autoPlay: true,
-        looping: false,
-        fullScreenByDefault: false,
-        allowedScreenSleep: false,
         handleLifecycle: true,
-        autoDetectFullscreenDeviceOrientation: true,
-        deviceOrientationsOnFullScreen: const [
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ],
-        deviceOrientationsAfterFullScreen: const [
-          DeviceOrientation.portraitUp,
-        ],
-        eventListener: _handlePlayerEvent,
-        controlsConfiguration: const BetterPlayerControlsConfiguration(
-          enableFullscreen: true,
-          enablePip: true,
-          enablePlayPause: true,
-          enableMute: true,
-          enableProgressBar: true,
-          enableProgressText: true,
-          enableRetry: true,
-          showControlsOnInitialize: true,
-          controlBarColor: Colors.black54,
-          progressBarPlayedColor: Color(0xFFE50914),
-          progressBarHandleColor: Color(0xFFE50914),
-          loadingColor: Color(0xFFE50914),
-          enableSubtitles: true,
-          enableAudioTracks: true,
-          showControls: true,
-          enableQualities: true,
-        ),
-        placeholder: Container(
-          color: Colors.black,
-          child: const Center(
-            child: CircularProgressIndicator(color: Color(0xFFE50914)),
-          ),
-        ),
-        showPlaceholderUntilPlay: true,
-        placeholderOnTop: false,
+        aspectRatio: 16 / 9,
+        errorBuilder: (context, errorMessage) {
+          debugPrint("❌ BetterPlayer Error: $errorMessage");
+          return Center(
+            child: Text(
+              "Playback Error: $errorMessage",
+              style: TextStyle(color: Colors.red),
+            ),
+          );
+        },
+        eventListener: (event) {
+          debugPrint("🎥 Player Event: ${event.betterPlayerEventType} - ${event.parameters}");
+          _handlePlayerEvent(event);
+        },
       );
 
       _betterPlayerController = BetterPlayerController(
         betterPlayerConfiguration,
-        betterPlayerDataSource: betterPlayerDataSource,
+        betterPlayerDataSource: BetterPlayerDataSource(
+          BetterPlayerDataSourceType.network,
+          widget.channel.url,
+          useAsmsSubtitles: false,
+          useAsmsTracks: false,
+          cacheConfiguration: BetterPlayerCacheConfiguration(useCache: false),
+          bufferingConfiguration: BetterPlayerBufferingConfiguration(
+            minBufferMs: 2000,
+            maxBufferMs: 10000,
+            bufferForPlaybackMs: 1000,
+            bufferForPlaybackAfterRebufferMs: 2000,
+          ),
+        ),
       );
 
 
