@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/device_info.dart';
 import 'home_screen.dart';
+import 'input_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -38,7 +40,7 @@ class _SplashScreenState extends State<SplashScreen>
     _animationController.forward();
 
     // Navigate to home screen after 3 seconds
-    Future.delayed(const Duration(seconds: 3), _navigateToHome);
+    Future.delayed(const Duration(seconds: 3), _checkSavedPlaylist);
   }
 
   Future<void> _loadDeviceInfo() async {
@@ -58,13 +60,43 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
-  void _navigateToHome() {
+  Future<void> _checkSavedPlaylist() async {
     if (!mounted || _navigated) return;
     _navigated = true;
-    debugPrint("✅ SplashScreen: Navigating to HomeScreen...");
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
-    );
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedUrl = prefs.getString('m3u_url');
+      
+      if (savedUrl != null && savedUrl.isNotEmpty) {
+        debugPrint("✅ SplashScreen: Found saved playlist, navigating to HomeScreen...");
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => HomeScreen(playlistUrl: savedUrl),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 500),
+          ),
+        );
+      } else {
+        debugPrint("✅ SplashScreen: No saved playlist, navigating to InputScreen...");
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => const InputScreen(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 500),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("❌ Error checking saved playlist: $e");
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const InputScreen()),
+      );
+    }
   }
 
   @override
@@ -114,11 +146,11 @@ class _SplashScreenState extends State<SplashScreen>
 
               // App Name
               const Text(
-                'Pure Player 🚀 TEST',
+                'Pure Player',
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
-                  color: Colors.green,
+                  color: Colors.white,
                 ),
               ),
               const SizedBox(height: 10),
