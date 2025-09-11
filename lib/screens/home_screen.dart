@@ -22,11 +22,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // Focus management for D-Pad navigation
   int _focusedRow = 0;
   int _focusedCol = 0;
-  final List<List<FocusNode>> _focusNodes = [];
+  List<List<FocusNode>>? _focusNodes;
   
   // Animation controllers for button interactions
-  late List<List<AnimationController>> _scaleControllers;
-  late List<List<Animation<double>>> _scaleAnimations;
+  List<AnimationController>? _scaleControllers;
+  List<Animation<double>>? _scaleAnimations;
 
   @override
   void initState() {
@@ -38,65 +38,69 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       DeviceOrientation.landscapeRight,
     ]);
 
-    // Initialize focus nodes and animation controllers for 2x3 grid
-    _initializeFocusAndAnimations();
-    
-    // Load initial playlist if provided
-    if (widget.initialPlaylistUrl != null && widget.initialPlaylistUrl!.isNotEmpty) {
-      _loadPlaylist(widget.initialPlaylistUrl!);
-    }
-  }
-
-  void _initializeFocusAndAnimations() {
-    // Create 2 rows, 3 columns
+    // Initialize focus nodes for 2x3 grid
+    final focusNodes = <List<FocusNode>>[];
     for (int row = 0; row < 2; row++) {
-      _focusNodes.add([]);
-      _scaleControllers.add([]);
+      focusNodes.add([]);
       for (int col = 0; col < 3; col++) {
-        // Focus nodes
-        final focusNode = FocusNode();
-        _focusNodes[row].add(focusNode);
-        
-        // Animation controllers
-        final controller = AnimationController(
-          duration: const Duration(milliseconds: 150),
-          vsync: this,
-        );
-        _scaleControllers.add([]);
-        _scaleControllers[row].add(controller);
-        
-        // Scale animations
-        final animation = Tween<double>(
-          begin: 1.0,
-          end: 1.1,
-        ).animate(CurvedAnimation(
-          parent: controller,
-          curve: Curves.easeOut,
-        ));
-        
-        if (row == 0) {
-          _scaleAnimations.add([]);
-        }
-        _scaleAnimations[row].add(animation);
-        
-        // Focus listeners
-        focusNode.addListener(() {
-          if (focusNode.hasFocus) {
-            controller.forward();
-            setState(() {
+        focusNodes[row].add(FocusNode());
+      }
+    }
+    _focusNodes = focusNodes;
+    
+    // Initialize animation controllers
+    final controllers = List.generate(6, (index) {
+      return AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 200),
+        lowerBound: 0.95,
+        upperBound: 1.1,
+      )..value = 1.0;
+    });
+    _scaleControllers = controllers;
+    debugPrint("✅ _scaleControllers initialized with ${controllers.length} controllers");
+    
+    // Initialize scale animations
+    final animations = controllers.map((controller) {
+      return Tween<double>(
+        begin: 0.95,
+        end: 1.1,
+      ).animate(CurvedAnimation(
+        parent: controller,
+        curve: Curves.easeInOut,
+      ));
+    }).toList();
+    _scaleAnimations = animations;
+    
+    // Set up focus listeners
+    final focusNodesRef = _focusNodes;
+    if (focusNodesRef == null) return;
+    
+    for (int row = 0; row < 2; row++) {
+      for (int col = 0; col < 3; col++) {
+        final buttonIndex = row * 3 + col;
+        focusNodesRef[row][col].addListener(() {
+          if (focusNodesRef[row][col].hasFocus) {
+            _scaleControllers?[buttonIndex]?.forward();
+            if (mounted) setState(() {
               _focusedRow = row;
               _focusedCol = col;
             });
           } else {
-            controller.reverse();
+            _scaleControllers?[buttonIndex]?.reverse();
           }
         });
       }
     }
     
+    // Load initial playlist if provided
+    if (widget.initialPlaylistUrl != null && widget.initialPlaylistUrl!.isNotEmpty) {
+      _loadPlaylist(widget.initialPlaylistUrl!);
+    }
+    
     // Set initial focus
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNodes[0][0].requestFocus();
+      _focusNodes?[0][0].requestFocus();
     });
   }
 
@@ -320,9 +324,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _handleButtonPress(int row, int col) {
+    final buttonIndex = row * 3 + col;
+    
+    final controller = _scaleControllers?[buttonIndex];
+    if (controller == null) return;
+    
     // Press animation
-    _scaleControllers[row][col].forward().then((_) {
-      _scaleControllers[row][col].reverse();
+    controller.forward().then((_) {
+      controller.reverse();
     });
 
     // Handle navigation based on button position
@@ -368,6 +377,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        // Check if controllers are initialized
+        final scaleControllers = _scaleControllers;
+        final scaleAnimations = _scaleAnimations;
+        final focusNodes = _focusNodes;
+        
+        if (scaleControllers == null || scaleAnimations == null || focusNodes == null) {
+          return SizedBox(
+            width: MediaQuery.of(context).size.width * 0.25,
+            height: MediaQuery.of(context).size.width * 0.25 * 0.75,
+            child: const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFFE50914),
+                strokeWidth: 2,
+              ),
+            ),
+          );
+        }
+        
         final screenWidth = MediaQuery.of(context).size.width;
         final screenHeight = MediaQuery.of(context).size.height;
         
@@ -380,28 +407,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         final iconSize = fontSize * 1.2;
 
         return Focus(
-          focusNode: _focusNodes[row][col],
+          focusNode: focusNodes[row][col],
           onKeyEvent: (node, event) {
             if (event is KeyDownEvent) {
               switch (event.logicalKey) {
                 case LogicalKeyboardKey.arrowLeft:
                   if (col > 0) {
-                    _focusNodes[row][col - 1].requestFocus();
+                    focusNodes[row][col - 1].requestFocus();
                   }
                   return KeyEventResult.handled;
                 case LogicalKeyboardKey.arrowRight:
                   if (col < 2) {
-                    _focusNodes[row][col + 1].requestFocus();
+                    focusNodes[row][col + 1].requestFocus();
                   }
                   return KeyEventResult.handled;
                 case LogicalKeyboardKey.arrowUp:
                   if (row > 0) {
-                    _focusNodes[row - 1][col].requestFocus();
+                    focusNodes[row - 1][col].requestFocus();
                   }
                   return KeyEventResult.handled;
                 case LogicalKeyboardKey.arrowDown:
                   if (row < 1) {
-                    _focusNodes[row + 1][col].requestFocus();
+                    focusNodes[row + 1][col].requestFocus();
                   }
                   return KeyEventResult.handled;
                 case LogicalKeyboardKey.enter:
@@ -415,10 +442,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             return KeyEventResult.ignored;
           },
           child: AnimatedBuilder(
-            animation: _scaleAnimations[row][col],
+            animation: scaleAnimations[row * 3 + col],
             builder: (context, child) {
-              final scale = _scaleAnimations[row][col].value;
-              final isFocused = _focusNodes[row][col].hasFocus;
+              final buttonIndex = row * 3 + col;
+              final scale = scaleAnimations[buttonIndex].value;
+              final isFocused = focusNodes[row][col].hasFocus;
               
               return Transform.scale(
                 scale: scale,
@@ -426,17 +454,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   onTap: isEnabled ? () => _handleButtonPress(row, col) : null,
                   onTapDown: (_) {
                     if (isEnabled) {
-                      _scaleControllers[row][col].forward();
+                      scaleControllers[buttonIndex].forward();
                     }
                   },
                   onTapUp: (_) {
                     if (isEnabled) {
-                      _scaleControllers[row][col].reverse();
+                      scaleControllers[buttonIndex].reverse();
                     }
                   },
                   onTapCancel: () {
                     if (isEnabled) {
-                      _scaleControllers[row][col].reverse();
+                      scaleControllers[buttonIndex].reverse();
                     }
                   },
                   child: Container(
@@ -639,17 +667,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    // Dispose all animation controllers
-    for (int row = 0; row < _scaleControllers.length; row++) {
-      for (int col = 0; col < _scaleControllers[row].length; col++) {
-        _scaleControllers[row][col].dispose();
-      }
-    }
+    // Dispose animation controllers
+    _scaleControllers?.forEach((controller) {
+      controller.dispose();
+    });
     
     // Dispose all focus nodes
-    for (int row = 0; row < _focusNodes.length; row++) {
-      for (int col = 0; col < _focusNodes[row].length; col++) {
-        _focusNodes[row][col].dispose();
+    final focusNodes = _focusNodes;
+    if (focusNodes != null) {
+      for (int row = 0; row < focusNodes.length; row++) {
+        for (int col = 0; col < focusNodes[row].length; col++) {
+          focusNodes[row][col].dispose();
+        }
       }
     }
     
