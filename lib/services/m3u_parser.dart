@@ -1,24 +1,38 @@
 import 'dart:convert';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/channel.dart';
 
 class M3UParser {
   static Future<List<Channel>> fetchAndParseM3U(String url) async {
     try {
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {
-          'User-Agent': 'Pure Player/1.0',
-          'Accept': '*/*',
-        },
-      ).timeout(const Duration(seconds: 30));
+      debugPrint('🌐 Fetching M3U playlist: $url');
+      
+      final response = await http
+          .get(
+            Uri.parse(url),
+            headers: {
+              'User-Agent': 'Pure Player/1.0',
+              'Accept': '*/*',
+            },
+          )
+          .timeout(const Duration(seconds: 60), onTimeout: () {
+            debugPrint('⏳ Playlist fetch timed out after 60s: $url');
+            throw TimeoutException('Playlist request timed out', const Duration(seconds: 60));
+          });
+      
+      debugPrint('📡 HTTP Response: ${response.statusCode}');
       
       if (response.statusCode != 200) {
+        debugPrint('❌ HTTP Error ${response.statusCode} for URL: $url');
         throw Exception('Failed to load playlist: HTTP ${response.statusCode}');
       }
 
+      debugPrint('✅ Successfully fetched playlist, parsing content...');
       return parseM3UContent(response.body);
     } catch (e) {
+      debugPrint('❌ Error fetching playlist from $url: $e');
       throw Exception('Error fetching playlist: $e');
     }
   }
