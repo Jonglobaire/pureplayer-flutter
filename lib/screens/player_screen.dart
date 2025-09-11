@@ -20,6 +20,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   bool _isBuffering = false;
   String? _lastErrorCode;
   String? _failingUrl;
+  bool _hasTriedHttpsRetry = false;
 
   @override
   void initState() {
@@ -49,7 +50,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       });
 
       debugPrint('🎬 Pure Player: Initializing player for channel: ${widget.channel.name}');
-      debugPrint('🔗 Stream URL: ${widget.channel.url}');
+      debugPrint('🔗 Full Stream URL: ${widget.channel.url}');
+      debugPrint('📊 URL Protocol: ${Uri.parse(widget.channel.url).scheme}');
+      debugPrint('📊 URL Host: ${Uri.parse(widget.channel.url).host}');
+      debugPrint('🔄 HTTPS Retry Attempted: $_hasTriedHttpsRetry');
 
       // Use VLC User-Agent as many servers require this
       final headers = <String, String>{
@@ -181,7 +185,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _handlePlaybackException(BetterPlayerEvent event) {
     if (!mounted) return;
 
-    debugPrint('❌ Playback Exception: ${event.parameters}');
+    debugPrint('❌ PLAYBACK EXCEPTION OCCURRED');
+    debugPrint('📡 Full Event Parameters: ${event.parameters}');
     
     // Extract error details from parameters
     String errorCode = 'Unknown';
@@ -192,7 +197,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (params != null) {
         errorCode = params['code']?.toString() ?? 'Unknown';
         errorMessage = params['message']?.toString() ?? 'Playback failed';
+        
+        // Log ExoPlayer specific error details
+        debugPrint('🔴 ExoPlayer Error Code: $errorCode');
+        debugPrint('🔴 ExoPlayer Error Message: $errorMessage');
+        if (params['exception'] != null) {
+          debugPrint('🔴 ExoPlayer Exception: ${params['exception']}');
+        }
       }
+    }
+
+    // Check if we should try HTTPS fallback
+    final currentUrl = widget.channel.url;
+    if (!_hasTriedHttpsRetry && currentUrl.startsWith('http://')) {
+      debugPrint('🔄 HTTP stream failed, attempting HTTPS fallback...');
+      _tryHttpsFallback();
+      return;
     }
 
     setState(() {
@@ -204,51 +224,284 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _isBuffering = false;
     });
 
-    final displayUrl = widget.channel.url.length > 50 
-        ? '${widget.channel.url.substring(0, 50)}...' 
-        : widget.channel.url;
-    
-    _showErrorDialog(
-      'Playback Failed',
-      'Code: $errorCode\nURL: $displayUrl\n\n$errorMessage'
-    );
+    _showModernErrorDialog(errorCode, errorMessage);
   }
 
-  void _showErrorDialog(String title, String message) {
+  void _tryHttpsFallback() {
     if (!mounted) return;
+    
+    final httpsUrl = widget.channel.url.replaceFirst('http://', 'https://');
+    debugPrint('🔄 Trying HTTPS fallback: $httpsUrl');
+    
+    setState(() {
+      _hasTriedHttpsRetry = true;
+    });
+    
+    // Create a temporary channel with HTTPS URL
+    final httpsChannel = Channel(
+      name: widget.channel.name,
+      url: httpsUrl,
+      group: widget.channel.group,
+      logo: widget.channel.logo,
+      catchupUrl: widget.channel.catchupUrl,
+      attributes: widget.channel.attributes,
+    );
+    
+    // Dispose current controller and reinitialize with HTTPS URL
+    _disposeController();
+    
+    // Update the widget's channel URL temporarily for this retry
+    // Note: This is a workaround since we can't modify the final widget.channel
+    _initializePlayerWithUrl(httpsUrl);
+  }
+
+  void _initializePlayerWithUrl(String url) {
+    try {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = true;
+        _hasError = false;
+        _errorMessage = '';
+        _isBuffering = false;
+      });
+
+      debugPrint('🎬 Pure Player: Initializing player with custom URL: $url');
+
+      final headers = <String, String>{
+        'User-Agent': 'VLC/3.0.0 LibVLC/3.0.0',
+      };
+      debugPrint('📡 Headers: $headers');
+
+      final betterPlayerDataSource = BetterPlayerDataSource(
+        BetterPlayerDataSourceType.network,
+        url,
+        liveStream: true,
+        headers: headers,
+        videoFormat: BetterPlayerVideoFormat.other,
+        bufferingConfiguration: const BetterPlayerBufferingConfiguration(
+          minBufferMs: 2000,
+          maxBufferMs: 10000,
+          bufferForPlaybackMs: 1000,
+          bufferForPlaybackAfterRebufferMs: 2000,
+        ),
+      );
+
+      final betterPlayerConfiguration = BetterPlayerConfiguration(
+        aspectRatio: 16 / 9,
+        fit: BoxFit.contain,
+        autoPlay: true,
+        looping: false,
+        fullScreenByDefault: false,
+        allowedScreenSleep: false,
+        handleLifecycle: true,
+        autoDetectFullscreenDeviceOrientation: true,
+        deviceOrientationsOnFullScreen: const [
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ],
+        deviceOrientationsAfterFullScreen: const [
+          DeviceOrientation.portraitUp,
+        ],
+        eventListener: _handlePlayerEvent,
+        controlsConfiguration: const BetterPlayerControlsConfiguration(
+          enableFullscreen: true,
+          enablePip: true,
+          enablePlayPause: true,
+          enableMute: true,
+          enableProgressBar: true,
+          enableProgressText: true,
+          enableRetry: true,
+          showControlsOnInitialize: true,
+          controlBarColor: Colors.black54,
+          progressBarPlayedColor: Color(0xFFE50914),
+          progressBarHandleColor: Color(0xFFE50914),
+          loadingColor: Color(0xFFE50914),
+          enableSubtitles: true,
+          enableAudioTracks: true,
+          showControls: true,
+          enableQualities: true,
+        ),
+        placeholder: Container(
+          color: Colors.black,
+          child: const Center(
+            child: CircularProgressIndicator(color: Color(0xFFE50914)),
+          ),
+        ),
+        showPlaceholderUntilPlay: true,
+        placeholderOnTop: false,
+      );
+
+      _betterPlayerController = BetterPlayerController(
+        betterPlayerConfiguration,
+        betterPlayerDataSource: betterPlayerDataSource,
+      );
+
+      debugPrint('✅ Pure Player: Controller initialized successfully with custom URL');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Pure Player: Failed to initialize player with custom URL: $e');
+      debugPrint('Stack trace: $stackTrace');
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+          _errorMessage = 'Failed to initialize player: ${e.toString()}';
+        });
+        _showModernErrorDialog('INIT_ERROR', 'Failed to initialize player: ${e.toString()}');
+      }
+    }
+  }
+
+  void _showModernErrorDialog(String errorCode, String errorMessage) {
+    if (!mounted) return;
+    
+    final displayUrl = widget.channel.url.length > 60 
+        ? '${widget.channel.url.substring(0, 60)}...' 
+        : widget.channel.url;
     
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: Colors.grey[900],
-          title: Text(
-            title,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: Colors.red.withOpacity(0.3)),
           ),
-          content: Text(
-            message,
-            style: const TextStyle(color: Colors.white70),
+          title: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                child: const Icon(
+                  Icons.warning_rounded,
+                  color: Colors.red,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Playback Failed',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[800],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Channel: ${widget.channel.name}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'URL: $displayUrl',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Error Code: $errorCode',
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                errorMessage,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+            ],
           ),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _retryPlayback();
-              },
-              child: const Text(
-                'Retry',
-                style: TextStyle(color: Color(0xFFE50914)),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      debugPrint('📝 User clicked Report Issue for channel: ${widget.channel.name}');
+                      debugPrint('📝 Reported URL: ${widget.channel.url}');
+                      debugPrint('📝 Error Code: $errorCode');
+                      debugPrint('📝 Error Message: $errorMessage');
+                    },
+                    icon: const Icon(Icons.bug_report, color: Colors.orange, size: 18),
+                    label: const Text(
+                      'Report Issue',
+                      style: TextStyle(color: Colors.orange),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _retryPlayback();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    icon: const Icon(Icons.refresh, size: 20),
+                    label: const Text(
+                      'Retry',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).pop(); // Go back to channel list
-              },
-              child: const Text(
-                'Back',
-                style: TextStyle(color: Colors.white70),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop(); // Go back to channel list
+                },
+                child: const Text(
+                  'Back to Channels',
+                  style: TextStyle(color: Colors.white70),
+                ),
               ),
             ),
           ],
@@ -271,6 +524,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _retryPlayback() {
     debugPrint('🔄 Retrying playback...');
+    setState(() {
+      _hasTriedHttpsRetry = false; // Reset retry flag for fresh attempt
+    });
     _disposeController();
     _initializePlayer();
   }
