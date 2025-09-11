@@ -26,14 +26,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void initState() {
     super.initState();
     debugPrint('🎬 Pure Player: Starting PlayerScreen for ${widget.channel.name}');
-    _initializePlayer();
 
-    // Lock orientations while player is open
+    // Force landscape orientation for player
     SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+    
+    _initializePlayer();
   }
 
   void _initializePlayer() {
@@ -88,10 +88,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
           DeviceOrientation.landscapeLeft,
           DeviceOrientation.landscapeRight,
         ],
-        deviceOrientationsAfterFullScreen: const [
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ],
         errorBuilder: (context, errorMessage) {
           debugPrint("❌ BetterPlayer Error: $errorMessage");
           return Center(
@@ -114,6 +110,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           enableProgressText: true,
           enableRetry: true,
           showControlsOnInitialize: true,
+          controlsHideTime: Duration(seconds: 3),
           controlBarColor: Colors.black54,
           progressBarPlayedColor: Color(0xFFE50914),
           progressBarHandleColor: Color(0xFFE50914),
@@ -122,7 +119,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
           enableAudioTracks: true,
           showControls: true,
           enableQualities: true,
-          controlsHideTime: Duration(seconds: 3),
         ),
         placeholder: Container(
           color: Colors.black,
@@ -793,7 +789,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     debugPrint('🗑️ PlayerScreen: Disposing...');
     _disposeController();
-    // Keep landscape orientation
+    // Keep landscape orientation after player
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
