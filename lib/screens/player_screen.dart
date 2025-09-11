@@ -82,11 +82,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
         autoDetectFullscreenDeviceOrientation: true,
         controlsConfiguration: const BetterPlayerControlsConfiguration(
           showControlsOnInitialize: false,
+          autoHideControls: true,
+          controlsHideTime: Duration(seconds: 3),
           enableFullscreen: true,
           enableSkips: true,
           enableMute: true,
           enableOverflowMenu: true,
-          controlsHideTime: Duration(seconds: 3),
           controlBarColor: Colors.black54,
           progressBarPlayedColor: Color(0xFFE50914),
           progressBarHandleColor: Color(0xFFE50914),

@@ -1,20 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  runApp(const PurePlayerApp());
+  // Force landscape orientation globally
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+  
+  // Load saved playlist URL
+  final prefs = await SharedPreferences.getInstance();
+  final savedUrl = prefs.getString('playlistUrl');
+  
+  runApp(PurePlayerApp(initialPlaylistUrl: savedUrl));
 }
 
 class PurePlayerApp extends StatelessWidget {
-  const PurePlayerApp({super.key});
+  final String? initialPlaylistUrl;
+  
+  const PurePlayerApp({super.key, this.initialPlaylistUrl});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Pure Player',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -38,8 +52,7 @@ class PurePlayerApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const HomeScreen(),
-      debugShowCheckedModeBanner: false,
+      home: HomeScreen(initialPlaylistUrl: initialPlaylistUrl),
     );
   }
 }
