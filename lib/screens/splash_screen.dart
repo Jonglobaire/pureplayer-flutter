@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../utils/device_info.dart';
-import 'home_screen.dart';
-import 'input_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -14,18 +10,21 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
+  late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-  String _deviceInfo = '';
-  bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
-    debugPrint("🔄 SplashScreen: Initializing...");
+    
+    // Force landscape orientation
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
 
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1800),
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
 
@@ -33,164 +32,99 @@ class _SplashScreenState extends State<SplashScreen>
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOutCubic,
+      parent: _fadeController,
+      curve: Curves.easeInOut,
     ));
 
-    _loadDeviceInfo();
-    _animationController.forward();
+    _fadeController.forward();
 
-    // Navigate after 3 seconds
-    Future.delayed(const Duration(seconds: 3), _checkSavedPlaylist);
-  }
-
-  Future<void> _loadDeviceInfo() async {
-    try {
-      final macAddress = await DeviceInfoHelper.getMacAddress();
-      final deviceModel = await DeviceInfoHelper.getDeviceModel();
-
+    // Auto-transition after 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
-        setState(() {
-          _deviceInfo = '$deviceModel\nDevice ID: $macAddress';
+        _fadeController.reverse().then((_) {
+          // Navigation handled by main.dart
         });
-        debugPrint("📱 Device Info Loaded: $_deviceInfo");
       }
-    } catch (e, stackTrace) {
-      debugPrint("❌ Failed to load device info: $e");
-      debugPrint(stackTrace.toString());
-    }
-  }
-
-  Future<void> _checkSavedPlaylist() async {
-    if (!mounted || _navigated) return;
-    _navigated = true;
-    
-    // Force landscape orientation after splash
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
-    
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedUrl = prefs.getString('m3u_url');
-      
-      if (savedUrl != null && savedUrl.isNotEmpty) {
-        debugPrint("✅ SplashScreen: Found saved playlist, navigating to HomeScreen...");
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => HomeScreen(playlistUrl: savedUrl),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            transitionDuration: const Duration(milliseconds: 500),
-          ),
-        );
-      } else {
-        debugPrint("✅ SplashScreen: No saved playlist, navigating to InputScreen...");
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const InputScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            transitionDuration: const Duration(milliseconds: 500),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint("❌ Error checking saved playlist: $e");
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const InputScreen()),
-      );
-    }
+    });
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _fadeController.dispose();
     super.dispose();
-    debugPrint("🗑️ SplashScreen disposed");
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D47A1),
-      body: Center(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // App Logo
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE50914),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFE50914).withOpacity(0.3),
-                      blurRadius: 20,
-                      spreadRadius: 5,
+      backgroundColor: Colors.black,
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final screenWidth = constraints.maxWidth;
+            final screenHeight = constraints.maxHeight;
+            
+            // Logo size: 20% of screen width
+            final logoSize = screenWidth * 0.2;
+            
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // App Logo
+                  Container(
+                    width: logoSize,
+                    height: logoSize,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE50914),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFE50914).withOpacity(0.5),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: const Center(
-                  child: Text(
-                    'P',
+                    child: Center(
+                      child: Text(
+                        'P',
+                        style: TextStyle(
+                          fontSize: logoSize * 0.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                  SizedBox(height: screenHeight * 0.08),
+                  
+                  // Loading Spinner
+                  const CircularProgressIndicator(
+                    color: Color(0xFFE50914),
+                    strokeWidth: 4,
+                  ),
+                  
+                  SizedBox(height: screenHeight * 0.04),
+                  
+                  // Loading Text
+                  Text(
+                    'SERVER CONTENT LOADING...',
                     style: TextStyle(
-                      fontSize: 60,
-                      fontWeight: FontWeight.bold,
                       color: Colors.white,
+                      fontSize: screenHeight * 0.03,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2.0,
                     ),
+                    textAlign: TextAlign.center,
                   ),
-                ),
+                ],
               ),
-              const SizedBox(height: 30),
-
-              // App Name
-              const Text(
-                'Pure Player',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // Subtitle
-              const Text(
-                'IPTV Streaming Player',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 50),
-
-              // Loading indicator
-              const CircularProgressIndicator(
-                color: Color(0xFFE50914),
-                strokeWidth: 3,
-              ),
-              const SizedBox(height: 30),
-
-              // Device info
-              if (_deviceInfo.isNotEmpty)
-                Text(
-                  _deviceInfo,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
-                ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
