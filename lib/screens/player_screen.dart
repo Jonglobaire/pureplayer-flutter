@@ -78,22 +78,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
       final betterPlayerConfiguration = BetterPlayerConfiguration(
         autoPlay: true,
         handleLifecycle: true,
-        aspectRatio: 16 / 9,
         fit: BoxFit.contain,
-        looping: false,
-        fullScreenByDefault: false,
-        allowedScreenSleep: false,
         autoDetectFullscreenDeviceOrientation: true,
-        deviceOrientationsOnFullScreen: const [
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ],
+        controlsConfiguration: const BetterPlayerControlsConfiguration(
+          showControlsOnInitialize: false,
+          enableFullscreen: true,
+          enableSkips: true,
+          enableMute: true,
+          enableOverflowMenu: true,
+          controlsHideTime: Duration(seconds: 3),
+          controlBarColor: Colors.black54,
+          progressBarPlayedColor: Color(0xFFE50914),
+          progressBarHandleColor: Color(0xFFE50914),
+          loadingColor: Color(0xFFE50914),
+        ),
         errorBuilder: (context, errorMessage) {
           debugPrint("❌ BetterPlayer Error: $errorMessage");
           return Center(
             child: Text(
               "Playback Error: $errorMessage",
-              style: TextStyle(color: Colors.red),
+              style: const TextStyle(color: Colors.red),
             ),
           );
         },
@@ -101,33 +105,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
           debugPrint("🎥 Player Event: ${event.betterPlayerEventType} - ${event.parameters}");
           _handlePlayerEvent(event);
         },
-        controlsConfiguration: const BetterPlayerControlsConfiguration(
-          enableFullscreen: true,
-          enablePip: true,
-          enablePlayPause: true,
-          enableMute: true,
-          enableProgressBar: true,
-          enableProgressText: true,
-          enableRetry: true,
-          showControlsOnInitialize: true,
-          controlsHideTime: Duration(seconds: 3),
-          controlBarColor: Colors.black54,
-          progressBarPlayedColor: Color(0xFFE50914),
-          progressBarHandleColor: Color(0xFFE50914),
-          loadingColor: Color(0xFFE50914),
-          enableSubtitles: true,
-          enableAudioTracks: true,
-          showControls: true,
-          enableQualities: true,
-        ),
-        placeholder: Container(
-          color: Colors.black,
-          child: const Center(
-            child: CircularProgressIndicator(color: Color(0xFFE50914)),
-          ),
-        ),
-        showPlaceholderUntilPlay: true,
-        placeholderOnTop: false,
       );
 
       _betterPlayerController = BetterPlayerController(
@@ -137,8 +114,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
           widget.channel.url,
           useAsmsSubtitles: false,
           useAsmsTracks: false,
-          cacheConfiguration: BetterPlayerCacheConfiguration(useCache: false),
-          bufferingConfiguration: BetterPlayerBufferingConfiguration(
+          cacheConfiguration: const BetterPlayerCacheConfiguration(useCache: false),
+          bufferingConfiguration: const BetterPlayerBufferingConfiguration(
             minBufferMs: 2000,
             maxBufferMs: 10000,
             bufferForPlaybackMs: 1000,

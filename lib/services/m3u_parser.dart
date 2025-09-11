@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/channel.dart';
@@ -7,6 +9,8 @@ import '../models/channel.dart';
 class M3UParser {
   static Future<List<Channel>> fetchAndParseM3U(String url) async {
     try {
+      debugPrint('🌐 Fetching M3U playlist: $url');
+      
       debugPrint('🌐 Fetching M3U playlist: $url');
       
       final response = await http
@@ -24,14 +28,20 @@ class M3UParser {
       
       debugPrint('📡 HTTP Response: ${response.statusCode}');
       
+      debugPrint('📡 HTTP Response: ${response.statusCode}');
+      
       if (response.statusCode != 200) {
+        debugPrint('❌ HTTP Error ${response.statusCode} for URL: $url');
         debugPrint('❌ HTTP Error ${response.statusCode} for URL: $url');
         throw Exception('Failed to load playlist: HTTP ${response.statusCode}');
       }
 
       debugPrint('✅ Successfully fetched playlist, parsing content...');
-      return parseM3UContent(response.body);
+      // Force UTF-8 decoding to fix special characters
+      final decodedBody = utf8.decode(response.bodyBytes);
+      return parseM3UContent(decodedBody);
     } catch (e) {
+      debugPrint('❌ Error fetching playlist from $url: $e');
       debugPrint('❌ Error fetching playlist from $url: $e');
       throw Exception('Error fetching playlist: $e');
     }

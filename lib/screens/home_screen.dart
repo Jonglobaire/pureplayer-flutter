@@ -278,6 +278,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final textScale = MediaQuery.of(context).textScaleFactor;
+    
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -294,7 +297,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeAnimation,
-            child: _isLoading ? _buildLoadingScreen() : _buildMainContent(),
+            child: _isLoading ? _buildLoadingScreen() : _buildMainContent(screenSize, textScale),
           ),
         ),
       ),
@@ -317,195 +320,200 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildMainContent() {
+  Widget _buildMainContent(Size screenSize, double textScale) {
     final liveChannels = _getChannelsByType('live');
     final movieChannels = _getChannelsByType('movies');
     final seriesChannels = _getChannelsByType('series');
 
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Row(
-        children: [
-          // Main content area
-          Expanded(
-            flex: 4,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(
-                  children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE50914),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFE50914).withOpacity(0.3),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'P',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Pure Player',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        Text(
-                          'Professional Streaming Experience',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 40),
+    return SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.all(screenSize.width * 0.02),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Main content area (2x2 grid)
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  _buildHeader(textScale),
+                  SizedBox(height: screenSize.height * 0.03),
 
-                // Main content grid
-                Expanded(
-                  child: _allChannels.isEmpty ? _buildNoPlaylistContent() : _buildContentGrid(liveChannels, movieChannels, seriesChannels),
-                ),
-              ],
+                  // Main content
+                  _allChannels.isEmpty ? _buildNoPlaylistContent(screenSize) : _buildContentGrid(liveChannels, movieChannels, seriesChannels, screenSize),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 24),
+            SizedBox(width: screenSize.width * 0.02),
 
-          // Right sidebar
-          _buildSidebar(liveChannels, movieChannels, seriesChannels),
-        ],
+            // Right sidebar
+            _buildSidebar(liveChannels, movieChannels, seriesChannels, screenSize, textScale),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildNoPlaylistContent() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
-            ),
-            child: Column(
-              children: [
-                const Icon(
-                  Icons.playlist_remove,
-                  size: 64,
-                  color: Colors.white38,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'No Playlist Loaded',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Load an M3U playlist to start streaming',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: _showChangePlaylistDialog,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE50914),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: const Icon(Icons.add),
-                  label: const Text(
-                    'Load Playlist',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContentGrid(List<Channel> liveChannels, List<Channel> movieChannels, List<Channel> seriesChannels) {
+  Widget _buildHeader(double textScale) {
     return Row(
       children: [
-        // Left side - Live TV (large tile)
-        Expanded(
-          flex: 2,
-          child: _buildLargeTile(
-            'Live TV',
-            Icons.live_tv,
-            '${liveChannels.length} channels',
-            const Color(0xFFE50914),
-            () => _navigateToChannels('live', 'Live TV'),
-          ),
-        ),
-        const SizedBox(width: 20),
-        
-        // Right side - Movies and Series
-        Expanded(
-          flex: 1,
-          child: Column(
-            children: [
-              Expanded(
-                child: _buildMediumTile(
-                  'Movies',
-                  Icons.movie,
-                  '${movieChannels.length} movies',
-                  const Color(0xFF1976D2),
-                  () => _navigateToChannels('movies', 'Movies'),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: _buildMediumTile(
-                  'Series',
-                  Icons.video_library,
-                  '${seriesChannels.length} series',
-                  const Color(0xFF388E3C),
-                  () => _navigateToChannels('series', 'TV Series'),
-                ),
+        Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE50914),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFE50914).withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
+          child: const Center(
+            child: Text(
+              'P',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 20),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Pure Player',
+              style: TextStyle(
+                fontSize: 28 * textScale,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              'Professional Streaming Experience',
+              style: TextStyle(
+                fontSize: 16 * textScale,
+                color: Colors.white70,
+              ),
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _buildNoPlaylistContent(Size screenSize) {
+    return Center(
+      child: Container(
+        height: screenSize.height * 0.6,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.playlist_remove,
+              size: 64,
+              color: Colors.white38,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No Playlist Loaded',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Load an M3U playlist to start streaming',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _showChangePlaylistDialog,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE50914),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text(
+                'Load Playlist',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContentGrid(List<Channel> liveChannels, List<Channel> movieChannels, List<Channel> seriesChannels, Size screenSize) {
+    return SizedBox(
+      height: screenSize.height * 0.6,
+      child: Row(
+        children: [
+          // Left side - Live TV (large tile)
+          Expanded(
+            flex: 2,
+            child: _buildLargeTile(
+              'Live TV',
+              Icons.live_tv,
+              '${liveChannels.length} channels',
+              const Color(0xFFE50914),
+              () => _navigateToChannels('live', 'Live TV'),
+            ),
+          ),
+          const SizedBox(width: 20),
+          
+          // Right side - Movies and Series (2x1 grid)
+          Expanded(
+            flex: 1,
+            child: Column(
+              children: [
+                Expanded(
+                  child: _buildMediumTile(
+                    'Movies',
+                    Icons.movie,
+                    '${movieChannels.length} movies',
+                    const Color(0xFF1976D2),
+                    () => _navigateToChannels('movies', 'Movies'),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: _buildMediumTile(
+                    'Series',
+                    Icons.video_library,
+                    '${seriesChannels.length} series',
+                    const Color(0xFF388E3C),
+                    () => _navigateToChannels('series', 'TV Series'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -621,9 +629,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildSidebar(List<Channel> liveChannels, List<Channel> movieChannels, List<Channel> seriesChannels) {
-    return Container(
-      width: 280,
+  Widget _buildSidebar(List<Channel> liveChannels, List<Channel> movieChannels, List<Channel> seriesChannels, Size screenSize, double textScale) {
+    return SizedBox(
+      width: screenSize.width * 0.25,
       child: Column(
         children: [
           // Playlist info card
@@ -637,11 +645,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Playlist Info',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 18,
+                    fontSize: 18 * textScale,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
