@@ -318,160 +318,161 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final seriesChannels = _getChannelsByType('series');
     final hasPlaylist = _allChannels.isNotEmpty;
 
-    return SingleChildScrollView(
-      child: Padding(
-        padding: EdgeInsets.all(screenSize.width * 0.02),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            _buildHeader(textScale),
-            SizedBox(height: screenSize.height * 0.03),
-            
-            // Main content
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Main content area (3/4 width)
-                Flexible(
-                  flex: 3,
-                  fit: FlexFit.loose,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Main buttons row
-                      Row(
-                        children: [
-                          // Live TV (large tile)
-                          Flexible(
-                            flex: 2,
-                            fit: FlexFit.loose,
-                            child: SizedBox(
-                              height: screenSize.height * 0.25,
-                              child: _buildLargeTile(
-                                'Live TV',
-                                Icons.live_tv,
-                                hasPlaylist ? '${liveChannels.length} channels' : 'No playlist loaded',
-                                const Color(0xFFE50914),
-                                hasPlaylist ? () => _navigateToChannels('live', 'Live TV') : null,
+    return Column(
+      children: [
+        // Header
+        Padding(
+          padding: EdgeInsets.all(screenSize.width * 0.02),
+          child: _buildHeader(textScale),
+        ),
+        
+        // Main content - IBO Player style layout
+        Expanded(
+          child: Center(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Calculate button dimensions based on available space
+                final availableWidth = constraints.maxWidth * 0.9; // 90% of screen width
+                final availableHeight = constraints.maxHeight * 0.7; // 70% of screen height
+                
+                // Large Live TV button (left side)
+                final largeButtonWidth = availableWidth * 0.35; // 35% of available width
+                final largeButtonHeight = availableHeight * 0.8; // 80% of available height
+                
+                // Small buttons (right side) - 2x3 grid
+                final smallButtonWidth = availableWidth * 0.15; // 15% of available width
+                final smallButtonHeight = smallButtonWidth * 0.75; // 4:3 aspect ratio
+                
+                // Spacing
+                final horizontalGap = availableWidth * 0.03; // 3% horizontal gap
+                final verticalGap = availableHeight * 0.05; // 5% vertical gap
+                
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Large Live TV button (left side)
+                    SizedBox(
+                      width: largeButtonWidth,
+                      height: largeButtonHeight,
+                      child: _buildLargeTile(
+                        'LIVE TV',
+                        Icons.live_tv,
+                        hasPlaylist ? '${liveChannels.length} channels' : 'No playlist loaded',
+                        const Color(0xFFE50914),
+                        hasPlaylist ? () => _navigateToChannels('live', 'Live TV') : null,
+                      ),
+                    ),
+                    
+                    SizedBox(width: horizontalGap * 2), // Double gap between sections
+                    
+                    // Right side - 2x3 grid of smaller buttons
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Top row: Movies, Series
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: smallButtonWidth,
+                              height: smallButtonHeight,
+                              child: _buildSmallTile(
+                                'MOVIES',
+                                Icons.movie,
+                                hasPlaylist ? '${movieChannels.length}' : '0',
+                                const Color(0xFF1976D2),
+                                hasPlaylist ? () => _navigateToChannels('movies', 'Movies') : null,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 20),
-                          
-                          // Movies and Series (stacked)
-                          Flexible(
-                            flex: 1,
-                            fit: FlexFit.loose,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  height: screenSize.height * 0.12,
-                                  child: _buildMediumTile(
-                                    'Movies',
-                                    Icons.movie,
-                                    hasPlaylist ? '${movieChannels.length} movies' : 'No playlist',
-                                    const Color(0xFF1976D2),
-                                    hasPlaylist ? () => _navigateToChannels('movies', 'Movies') : null,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                SizedBox(
-                                  height: screenSize.height * 0.12,
-                                  child: _buildMediumTile(
-                                    'Series',
-                                    Icons.video_library,
-                                    hasPlaylist ? '${seriesChannels.length} series' : 'No playlist',
-                                    const Color(0xFF388E3C),
-                                    hasPlaylist ? () => _navigateToChannels('series', 'TV Series') : null,
-                                  ),
-                                ),
-                              ],
+                            SizedBox(width: horizontalGap),
+                            SizedBox(
+                              width: smallButtonWidth,
+                              height: smallButtonHeight,
+                              child: _buildSmallTile(
+                                'SERIES',
+                                Icons.video_library,
+                                hasPlaylist ? '${seriesChannels.length}' : '0',
+                                const Color(0xFF388E3C),
+                                hasPlaylist ? () => _navigateToChannels('series', 'TV Series') : null,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                
-                const SizedBox(width: 20),
-                
-                // Right sidebar (1/4 width)
-                Flexible(
-                  flex: 1,
-                  fit: FlexFit.loose,
-                  child: _buildSidebar(liveChannels, movieChannels, seriesChannels, screenSize, textScale, hasPlaylist),
-                ),
-              ],
+                            SizedBox(width: horizontalGap),
+                            SizedBox(
+                              width: smallButtonWidth,
+                              height: smallButtonHeight,
+                              child: _buildSmallTile(
+                                'SETTINGS',
+                                Icons.settings,
+                                '',
+                                const Color(0xFF607D8B),
+                                () => _showSnackBar('Settings coming soon!'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        
+                        SizedBox(height: verticalGap),
+                        
+                        // Bottom row: Reload, Exit (centered)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: smallButtonWidth,
+                              height: smallButtonHeight,
+                              child: _buildSmallTile(
+                                'RELOAD',
+                                Icons.refresh,
+                                '',
+                                const Color(0xFFFF9800),
+                                hasPlaylist && _currentPlaylistUrl != null ? () => _loadPlaylist(_currentPlaylistUrl!) : null,
+                              ),
+                            ),
+                            SizedBox(width: horizontalGap),
+                            SizedBox(
+                              width: smallButtonWidth,
+                              height: smallButtonHeight,
+                              child: _buildSmallTile(
+                                'EXIT',
+                                Icons.exit_to_app,
+                                '',
+                                const Color(0xFFF44336),
+                                _exitApp,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
             ),
-          ],
+          ),
         ),
-      ),
+        
+        // Bottom playlist info (compact)
+        if (hasPlaylist)
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(screenSize.width * 0.02),
+            child: Center(
+              child: Text(
+                'Playlist: $_playlistName • ${_allChannels.length} channels total',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14 * textScale,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
   Widget _buildLargeTile(String title, IconData icon, String subtitle, Color color, VoidCallback? onTap) {
-    final isEnabled = onTap != null;
-    
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                color.withOpacity(isEnabled ? 0.8 : 0.3),
-                color.withOpacity(isEnabled ? 0.6 : 0.2),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: isEnabled ? [
-              BoxShadow(
-                color: color.withOpacity(0.3),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
-              ),
-            ] : null,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, color: isEnabled ? Colors.white : Colors.white54, size: 64),
-                const SizedBox(height: 20),
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: isEnabled ? Colors.white : Colors.white54,
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: isEnabled ? Colors.white70 : Colors.white38,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMediumTile(String title, IconData icon, String subtitle, Color color, VoidCallback? onTap) {
     final isEnabled = onTap != null;
     
     return Material(
@@ -493,8 +494,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             boxShadow: isEnabled ? [
               BoxShadow(
                 color: color.withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
+                blurRadius: 15,
+                offset: const Offset(0, 8),
               ),
             ] : null,
           ),
@@ -502,24 +503,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, color: isEnabled ? Colors.white : Colors.white54, size: 40),
-                const SizedBox(height: 12),
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: isEnabled ? Colors.white : Colors.white54,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  flex: 3,
+                  child: Icon(
+                    icon, 
+                    color: isEnabled ? Colors.white : Colors.white54, 
+                    size: 80,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: isEnabled ? Colors.white70 : Colors.white38,
-                    fontSize: 14,
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          title,
+                          style: TextStyle(
+                            color: isEnabled ? Colors.white : Colors.white54,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          subtitle,
+                          style: TextStyle(
+                            color: isEnabled ? Colors.white70 : Colors.white38,
+                            fontSize: 16,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -530,87 +552,75 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildSidebar(List<Channel> liveChannels, List<Channel> movieChannels, List<Channel> seriesChannels, Size screenSize, double textScale, bool hasPlaylist) {
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Playlist info card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
+  Widget _buildSmallTile(String title, IconData icon, String subtitle, Color color, VoidCallback? onTap) {
+    final isEnabled = onTap != null;
+    
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                color.withOpacity(isEnabled ? 0.8 : 0.3),
+                color.withOpacity(isEnabled ? 0.6 : 0.2),
+              ],
             ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: isEnabled ? [
+              BoxShadow(
+                color: color.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ] : null,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  'Playlist Info',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18 * textScale,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  flex: 2,
+                  child: Icon(
+                    icon, 
+                    color: isEnabled ? Colors.white : Colors.white54, 
+                    size: 32,
                   ),
                 ),
-                const SizedBox(height: 16),
-                if (hasPlaylist) ...[
-                  _buildInfoRow(Icons.link, 'Source', _playlistName),
-                  const SizedBox(height: 12),
-                  _buildInfoRow(Icons.tv, 'Total', '${_allChannels.length}'),
-                  const SizedBox(height: 12),
-                  _buildInfoRow(Icons.live_tv, 'Live TV', '${liveChannels.length}'),
-                  const SizedBox(height: 12),
-                  _buildInfoRow(Icons.movie, 'Movies', '${movieChannels.length}'),
-                  const SizedBox(height: 12),
-                  _buildInfoRow(Icons.video_library, 'Series', '${seriesChannels.length}'),
-                ] else ...[
-                  const Text(
-                    'No playlist loaded',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                Expanded(
+                  flex: 1,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        color: isEnabled ? Colors.white : Colors.white54,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
-                ],
+                ),
+                if (subtitle.isNotEmpty)
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: isEnabled ? Colors.white70 : Colors.white38,
+                      fontSize: 10,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-
-          // Action buttons
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildSidebarButton(
-                'Change Playlist',
-                Icons.playlist_play,
-                const Color(0xFF9C27B0),
-                _showChangePlaylistDialog,
-              ),
-              const SizedBox(height: 12),
-              _buildSidebarButton(
-                'Reload',
-                Icons.refresh,
-                const Color(0xFFFF9800),
-                hasPlaylist && _currentPlaylistUrl != null ? () => _loadPlaylist(_currentPlaylistUrl!) : null,
-              ),
-              const SizedBox(height: 12),
-              _buildSidebarButton(
-                'Settings',
-                Icons.settings,
-                const Color(0xFF607D8B),
-                () => _showSnackBar('Settings coming soon!'),
-              ),
-              const SizedBox(height: 12),
-              _buildSidebarButton(
-                'Exit',
-                Icons.exit_to_app,
-                const Color(0xFFF44336),
-                _exitApp,
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -665,81 +675,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ],
         ),
-      ],
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, color: const Color(0xFFE50914), size: 16),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSidebarButton(String title, IconData icon, Color color, VoidCallback? onTap) {
-    final isEnabled = onTap != null;
-    
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: isEnabled ? color.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isEnabled ? color.withOpacity(0.3) : Colors.grey.withOpacity(0.3),
+        const Spacer(),
+        // Change Playlist button in header
+        ElevatedButton.icon(
+          onPressed: _showChangePlaylistDialog,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF9C27B0),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                color: isEnabled ? color : Colors.grey,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: TextStyle(
-                  color: isEnabled ? Colors.white : Colors.grey,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
+          icon: const Icon(Icons.playlist_play, size: 20),
+          label: const Text('Change Playlist'),
         ),
-      ),
+      ],
     );
   }
 
