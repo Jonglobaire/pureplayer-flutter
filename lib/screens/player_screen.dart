@@ -81,14 +81,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
         fit: BoxFit.contain,
         autoDetectFullscreenDeviceOrientation: true,
         controlsConfiguration: const BetterPlayerControlsConfiguration(
-          enableFullscreen: true,
-          enablePlayPause: true,
-          enableMute: true,
-          enableProgressBar: true,
-          enableProgressText: true,
-          controlBarColor: Colors.black54,
-          controlsHideTime: Duration(seconds: 3),
           showControls: true,
+          controlsHideTime: Duration(seconds: 3),
+          enableFullscreen: true,
+          enableSkips: true,
+          enableMute: true,
+          enableOverflowMenu: true,
+          controlBarColor: Colors.black54,
+          progressBarPlayedColor: Color(0xFFE50914),
+          progressBarHandleColor: Color(0xFFE50914),
+          loadingColor: Color(0xFFE50914),
         ),
         errorBuilder: (context, errorMessage) {
           debugPrint("❌ BetterPlayer Error: $errorMessage");
