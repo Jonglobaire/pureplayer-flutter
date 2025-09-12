@@ -81,16 +81,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
         fit: BoxFit.contain,
         autoDetectFullscreenDeviceOrientation: true,
         controlsConfiguration: const BetterPlayerControlsConfiguration(
-          showControls: true,
-          controlsHideTime: Duration(seconds: 3),
           enableFullscreen: true,
-          enableSkips: true,
+          enablePlayPause: true,
           enableMute: true,
-          enableOverflowMenu: true,
+          enableProgressBar: true,
+          enableProgressText: true,
           controlBarColor: Colors.black54,
-          progressBarPlayedColor: Color(0xFFE50914),
-          progressBarHandleColor: Color(0xFFE50914),
-          loadingColor: Color(0xFFE50914),
+          controlsHideTime: Duration(seconds: 3),
+          showControls: true,
         ),
         errorBuilder: (context, errorMessage) {
           debugPrint("❌ BetterPlayer Error: $errorMessage");
@@ -112,9 +110,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         betterPlayerDataSource: BetterPlayerDataSource(
           BetterPlayerDataSourceType.network,
           widget.channel.url,
-          useAsmsSubtitles: false,
-          useAsmsTracks: false,
-          cacheConfiguration: const BetterPlayerCacheConfiguration(useCache: false),
+          liveStream: true,
+          headers: headers,
+          videoFormat: BetterPlayerVideoFormat.other,
           bufferingConfiguration: const BetterPlayerBufferingConfiguration(
             minBufferMs: 2000,
             maxBufferMs: 10000,
@@ -290,45 +288,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
         aspectRatio: 16 / 9,
         fit: BoxFit.contain,
         autoPlay: true,
-        looping: false,
-        fullScreenByDefault: false,
-        allowedScreenSleep: false,
         handleLifecycle: true,
         autoDetectFullscreenDeviceOrientation: true,
-        deviceOrientationsOnFullScreen: const [
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ],
-        deviceOrientationsAfterFullScreen: const [
-          DeviceOrientation.portraitUp,
-        ],
         eventListener: _handlePlayerEvent,
         controlsConfiguration: const BetterPlayerControlsConfiguration(
           enableFullscreen: true,
-          enablePip: true,
           enablePlayPause: true,
           enableMute: true,
           enableProgressBar: true,
           enableProgressText: true,
-          enableRetry: true,
-          showControlsOnInitialize: true,
           controlBarColor: Colors.black54,
-          progressBarPlayedColor: Color(0xFFE50914),
-          progressBarHandleColor: Color(0xFFE50914),
-          loadingColor: Color(0xFFE50914),
-          enableSubtitles: true,
-          enableAudioTracks: true,
+          controlsHideTime: Duration(seconds: 3),
           showControls: true,
-          enableQualities: true,
         ),
-        placeholder: Container(
-          color: Colors.black,
-          child: const Center(
-            child: CircularProgressIndicator(color: Color(0xFFE50914)),
-          ),
-        ),
-        showPlaceholderUntilPlay: true,
-        placeholderOnTop: false,
       );
 
       _betterPlayerController = BetterPlayerController(
