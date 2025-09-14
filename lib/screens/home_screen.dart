@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 import '../widgets/netflix_button.dart';
 import '../screens/channels_screen.dart';
 import '../screens/input_screen.dart';
@@ -24,11 +25,16 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _focusedIndex = 0;
   SharedPreferences? _prefs;
+  bool _isLoading = false;
+  Timer? _clockTimer;
+  String _currentTime = '';
 
   @override
   void initState() {
     super.initState();
     _initPrefs();
+    _updateTime();
+    _startClockTimer();
   }
 
   Future<void> _initPrefs() async {
@@ -64,6 +70,23 @@ class _HomeScreenState extends State<HomeScreen> {
     return null;
   }
 
+  void _updateTime() {
+    setState(() {
+      _currentTime = _getCurrentTime();
+    });
+  }
+
+  void _startClockTimer() {
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _updateTime();
+    });
+  }
+
+  String _getCurrentTime() {
+    final now = DateTime.now();
+    return "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+  }
+
   Future<bool> _checkPlaylistAndShowError() async {
     final url = await _resolveSavedPlaylistUrl();
     if (url == null) {
@@ -88,111 +111,149 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          // Background image
-          Container(
-            width: double.infinity,
-            height: double.infinity,
-            decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/images/bg.png'),
-                fit: BoxFit.cover,
-              ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF1A0000),
+              Colors.black,
+            ],
+          ),
+        ),
+        child: Stack(
+          children: [
+            _buildMainBody(),
+            if (_isLoading) _buildLoadingOverlay(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMainBody() {
+    return Stack(
+      children: [
+        // Background image
+        Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage('assets/images/bg.png'),
+              fit: BoxFit.cover,
             ),
           ),
+        ),
 
-          SafeArea(
-            child: Focus(
-              autofocus: true,
-              onKey: _handleKeyPress,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final w = constraints.maxWidth;
-                  final h = constraints.maxHeight;
+        SafeArea(
+          child: Focus(
+            autofocus: true,
+            onKey: _handleKeyPress,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final w = constraints.maxWidth;
+                final h = constraints.maxHeight;
 
-                  // EXACT PERCENTAGES FROM LAYOUT.JSON
-                  const livetvWidth = 0.275;    // 27.5% Live TV width
-                  const livetvHeight = 0.41;    // 41% Live TV height
-                  const gridButtonWidth = 0.1159;  // 11.59% Grid button width
-                  const gridButtonHeight = 0.1977; // 19.77% Grid button height
-                  const rightButtonWidth = 0.176;  // 17.6% Right button width
-                  const rightButtonHeight = 0.1163; // 11.63% Right button height
-                  const logoWidth = 0.33;    // 33% Logo width (50% increase)
-                  const logoTopMargin = 0.045;  // 4.5% Logo top margin
-                  const gridTopPosition = 0.4078; // 40.78% Grid top position
+                // EXACT PERCENTAGES FROM LAYOUT.JSON
+                const livetvWidth = 0.275;    // 27.5% Live TV width
+                const livetvHeight = 0.41;    // 41% Live TV height
+                const gridButtonWidth = 0.1159;  // 11.59% Grid button width
+                const gridButtonHeight = 0.1977; // 19.77% Grid button height
+                const rightButtonWidth = 0.176;  // 17.6% Right button width
+                const rightButtonHeight = 0.1163; // 11.63% Right button height
+                const logoWidth = 0.33;    // 33% Logo width (50% increase)
+                const logoTopMargin = 0.045;  // 4.5% Logo top margin
+                const gridTopPosition = 0.4078; // 40.78% Grid top position
 
-                  // TIGHTENED GAPS - FURTHER REDUCED
-                  final gLiveToGrid = (0.03 * w) * 0.75;    // 2.25% gap (REDUCED by 25%)
-                  final gGridCols = (0.025 * w) * 0.8;    // 2% gap between grid columns (REDUCED by 20%)
-                  final gGridToRight = 0.035 * w;  // 3.5% gap to right column
-                  final gRightVert = 0.035 * h;    // 3.5% vertical gap in right column
+                // REDUCED GAPS
+                final gLiveToGrid = (0.03 * w) * 0.5;    // Reduced gap
+                final gGridCols = 12.0;    // Fixed 12px gap between grid columns
+                final gGridToRight = 0.035 * w;  // 3.5% gap to right column
+                final gRightVert = 8.0;    // Fixed 8px vertical gap in right column
 
-                  // CALCULATE SIZES
-                  final liveW = livetvWidth * w;
-                  final liveH = livetvHeight * h;
-                  final gridW = gridButtonWidth * w;
-                  final gridH = gridButtonHeight * h;
-                  final rightW = rightButtonWidth * w;
-                  final rightH = rightButtonHeight * h;
+                // CALCULATE SIZES
+                final liveW = livetvWidth * w;
+                final liveH = livetvHeight * h;
+                final gridW = gridButtonWidth * w;
+                final gridH = gridButtonHeight * h;
+                final rightW = rightButtonWidth * w;
+                final rightH = rightButtonHeight * h;
 
-                  // CALCULATE TOTAL WIDTH AND CENTER
-                  final totalWidth = liveW + gLiveToGrid + (2 * gridW + gGridCols) + gGridToRight + rightW;
-                  final leftPad = (w - totalWidth) / 2;
+                // CALCULATE TOTAL WIDTH AND CENTER
+                final totalWidth = liveW + gLiveToGrid + (2 * gridW + gGridCols) + gGridToRight + rightW;
+                final leftPad = (w - totalWidth) / 2;
 
-                  return Stack(
-                    children: [
-                      // === BOTTOM GRADIENT OVERLAY ===
-                      Align(
-                        alignment: Alignment.bottomCenter,
+                return Stack(
+                  children: [
+                    // === BOTTOM GRADIENT OVERLAY ===
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Container(
+                        height: 0.18 * h,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black.withOpacity(0.8),
+                              Colors.transparent
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // === LOGO - TOP CENTER ===
+                    Positioned(
+                      top: 0.045 * h,
+                      left: (w - 0.33 * w) / 2, // Perfect center
+                      width: 0.33 * w,
+                      height: h * 0.15, // Maintain aspect ratio
+                      child: IgnorePointer(
                         child: Container(
-                          height: 0.18 * h,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [
-                                Colors.black.withOpacity(0.8),
-                                Colors.transparent
-                              ],
-                            ),
+                          alignment: Alignment.center,
+                          child: Image.asset(
+                            "assets/images/logo.png",
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
+                    ),
 
-                      // === LOGO - TOP CENTER ===
-                      Positioned(
-                        top: 0.045 * h,
-                        left: (w - 0.33 * w) / 2, // Perfect center
-                        width: 0.33 * w,
-                        height: h * 0.15, // Maintain aspect ratio
-                        child: IgnorePointer(
-                          child: Container(
-                            alignment: Alignment.center,
-                            child: Image.asset(
-                              "assets/images/logo.png",
-                              fit: BoxFit.contain,
-                            ),
-                          ),
+                    // === CLOCK - TOP RIGHT ===
+                    Positioned(
+                      top: 0.045 * h,
+                      right: 0.05 * w,
+                      child: Text(
+                        _currentTime,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
+                    ),
 
-                      // === CENTERED MAIN LAYOUT ===
-                      Positioned(
-                        top: gridTopPosition * h,
-                        left: leftPad,
-                        child: SizedBox(
-                          width: totalWidth,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // === LIVE TV BUTTON ===
-                              SizedBox(
-                                width: liveW,
+                    // === CENTERED MAIN LAYOUT ===
+                    Positioned(
+                      top: gridTopPosition * h,
+                      left: leftPad,
+                      child: SizedBox(
+                        width: totalWidth,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // === LIVE TV BUTTON (DOMINANT) ===
+                            Expanded(
+                              flex: 3,
+                              child: SizedBox(
                                 height: liveH,
                                 child: NetflixButton(
                                   isFocused: _focusedIndex == 0,
                                   onTap: () => _onPressed(0),
+                                  backgroundColor: const Color(0xFF5D2C2C),
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
@@ -203,35 +264,37 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                       const SizedBox(height: 12),
                                       const Text(
-                                        'Live TV',
+                                        'LIVE TV',
                                         style: TextStyle(
                                           color: Colors.white,
                                           fontSize: 18,
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
                               ),
+                            ),
 
-                              SizedBox(width: gLiveToGrid),
+                            SizedBox(width: gLiveToGrid),
 
-                              // === 2x2 GRID BUTTONS ===
-                              SizedBox(
-                                width: 2 * gridW + gGridCols,
-                                child: Column(
-                                  children: [
-                                    // Top row: Movies + Series
-                                    Row(
-                                      children: [
-                                        // Movies
-                                        SizedBox(
-                                          width: gridW,
+                            // === 2x2 GRID BUTTONS ===
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                children: [
+                                  // Top row: Movies + Series
+                                  Row(
+                                    children: [
+                                      // Movies
+                                      Expanded(
+                                        child: SizedBox(
                                           height: gridH,
                                           child: NetflixButton(
                                             isFocused: _focusedIndex == 1,
                                             onTap: () => _onPressed(1),
+                                            backgroundColor: const Color(0xFF5D2C2C),
                                             child: Column(
                                               mainAxisAlignment: MainAxisAlignment.center,
                                               children: [
@@ -242,25 +305,27 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 ),
                                                 const SizedBox(height: 8),
                                                 const Text(
-                                                  'Movies',
+                                                  'MOVIES',
                                                   style: TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 16,
-                                                    fontWeight: FontWeight.w600,
+                                                    fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
                                               ],
                                             ),
                                           ),
                                         ),
-                                        SizedBox(width: gGridCols),
-                                        // Series
-                                        SizedBox(
-                                          width: gridW,
+                                      ),
+                                      SizedBox(width: gGridCols),
+                                      // Series
+                                      Expanded(
+                                        child: SizedBox(
                                           height: gridH,
                                           child: NetflixButton(
                                             isFocused: _focusedIndex == 2,
                                             onTap: () => _onPressed(2),
+                                            backgroundColor: const Color(0xFF5D2C2C),
                                             child: Column(
                                               mainAxisAlignment: MainAxisAlignment.center,
                                               children: [
@@ -271,30 +336,32 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 ),
                                                 const SizedBox(height: 8),
                                                 const Text(
-                                                  'Series',
+                                                  'SERIES',
                                                   style: TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 16,
-                                                    fontWeight: FontWeight.w600,
+                                                    fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
                                               ],
                                             ),
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                    SizedBox(height: 0.02 * h), // 2% vertical gap
-                                    // Bottom row: Account + Playlist
-                                    Row(
-                                      children: [
-                                        // Account
-                                        SizedBox(
-                                          width: gridW,
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: gRightVert), // 8px vertical gap
+                                  // Bottom row: Account + Playlist
+                                  Row(
+                                    children: [
+                                      // Account
+                                      Expanded(
+                                        child: SizedBox(
                                           height: gridH,
                                           child: NetflixButton(
                                             isFocused: _focusedIndex == 3,
                                             onTap: () => _onPressed(3),
+                                            backgroundColor: const Color(0xFF5D2C2C),
                                             child: Column(
                                               mainAxisAlignment: MainAxisAlignment.center,
                                               children: [
@@ -305,25 +372,27 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 ),
                                                 const SizedBox(height: 8),
                                                 const Text(
-                                                  'Account',
+                                                  'ACCOUNT',
                                                   style: TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 16,
-                                                    fontWeight: FontWeight.w600,
+                                                    fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
                                               ],
                                             ),
                                           ),
                                         ),
-                                        SizedBox(width: gGridCols),
-                                        // Playlist
-                                        SizedBox(
-                                          width: gridW,
+                                      ),
+                                      SizedBox(width: gGridCols),
+                                      // Playlist
+                                      Expanded(
+                                        child: SizedBox(
                                           height: gridH,
                                           child: NetflixButton(
                                             isFocused: _focusedIndex == 4,
                                             onTap: () => _onPressed(4),
+                                            backgroundColor: const Color(0xFF5D2C2C),
                                             child: Column(
                                               mainAxisAlignment: MainAxisAlignment.center,
                                               children: [
@@ -334,32 +403,35 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 ),
                                                 const SizedBox(height: 8),
                                                 const Text(
-                                                  'Playlist',
+                                                  'PLAYLIST',
                                                   textAlign: TextAlign.center,
                                                   style: TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 16,
-                                                    fontWeight: FontWeight.w600,
+                                                    fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
                                               ],
                                             ),
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
+                            ),
 
-                              SizedBox(width: gGridToRight),
+                            SizedBox(width: gGridToRight),
 
-                              // === RIGHT COLUMN BUTTONS ===
-                              Column(
+                            // === RIGHT COLUMN BUTTONS ===
+                            SizedBox(
+                              width: rightW,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   // Settings
                                   SizedBox(
-                                    width: rightW,
                                     height: rightH,
                                     child: NetflixButton(
                                       isOutline: true,
@@ -375,11 +447,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ),
                                           const SizedBox(width: 8),
                                           const Text(
-                                            'Settings',
+                                            'SETTINGS',
                                             style: TextStyle(
                                               color: Colors.white,
                                               fontSize: 16,
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ],
@@ -389,7 +461,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   SizedBox(height: gRightVert),
                                   // Reload
                                   SizedBox(
-                                    width: rightW,
                                     height: rightH,
                                     child: NetflixButton(
                                       isOutline: true,
@@ -405,11 +476,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ),
                                           const SizedBox(width: 8),
                                           const Text(
-                                            'Reload',
+                                            'RELOAD',
                                             style: TextStyle(
                                               color: Colors.white,
                                               fontSize: 16,
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ],
@@ -419,7 +490,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   SizedBox(height: gRightVert),
                                   // Quit
                                   SizedBox(
-                                    width: rightW,
                                     height: rightH,
                                     child: NetflixButton(
                                       isOutline: true,
@@ -435,11 +505,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ),
                                           const SizedBox(width: 8),
                                           const Text(
-                                            'Quit',
+                                            'QUIT',
                                             style: TextStyle(
                                               color: Colors.white,
                                               fontSize: 16,
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ],
@@ -448,17 +518,44 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  );
-                },
-              ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoadingOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.8),
+        child: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+              ),
+              SizedBox(height: 20),
+              Text(
+                "Loading content...",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -533,25 +630,33 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onPressed(int index) async {
     switch (index) {
       case 0: // Live TV
+        setState(() => _isLoading = true);
         if (await _checkPlaylistAndShowError()) {
-          _navigateToLiveTV();
+          await _navigateToLiveTV();
         }
+        setState(() => _isLoading = false);
         break;
       case 1: // Movies
+        setState(() => _isLoading = true);
         if (await _checkPlaylistAndShowError()) {
+          await Future.delayed(const Duration(seconds: 1));
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const MoviesScreen()),
           );
         }
+        setState(() => _isLoading = false);
         break;
       case 2: // Series
+        setState(() => _isLoading = true);
         if (await _checkPlaylistAndShowError()) {
+          await Future.delayed(const Duration(seconds: 1));
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const SeriesScreen()),
           );
         }
+        setState(() => _isLoading = false);
         break;
       case 3: // Account
         Navigator.push(
@@ -584,6 +689,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final playlistUrl = await _resolveSavedPlaylistUrl();
     if (playlistUrl != null) {
       try {
+        await Future.delayed(const Duration(seconds: 1)); // Simulate loading
         final channels = await M3UParser.fetchAndParseM3U(playlistUrl);
         if (channels.isNotEmpty) {
           Navigator.push(
@@ -678,5 +784,11 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
   }
 }

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/channel.dart';
 import 'player_screen.dart';
+import 'home_screen.dart';
+import 'movies_screen.dart';
+import 'series_screen.dart';
 
 class ChannelsScreen extends StatefulWidget {
   final List<Channel> channels;
@@ -99,6 +102,14 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
     setState(() {
       _selectedChannel = channel;
     });
+    // Auto-play preview when channel is selected
+    _previewChannel(channel);
+  }
+
+  void _previewChannel(Channel channel) {
+    // This would trigger auto-play in the preview panel
+    // For now, we'll just update the selected channel
+    // In a full implementation, this would start streaming the preview
   }
 
   @override
@@ -134,8 +145,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
         child: Row(
           children: [
             // Navigation Tabs
-            Expanded(
-              flex: 2,
+            Flexible(
+              flex: 3,
               child: Row(
                 children: [
                   _buildTabButton('Home'),
@@ -150,7 +161,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
             ),
             
             // Search Bar
-            Expanded(
+            Flexible(
               flex: 1,
               child: Container(
                 height: 40,
@@ -198,9 +209,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
     final isActive = _selectedTab == title;
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _selectedTab = title;
-        });
+        _navigateToTab(title);
       },
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -227,28 +236,57 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
     );
   }
 
+  void _navigateToTab(String title) {
+    switch (title) {
+      case 'Home':
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+        break;
+      case 'Movies':
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MoviesScreen()),
+        );
+        break;
+      case 'Series':
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const SeriesScreen()),
+        );
+        break;
+      case 'Live TV':
+        // Already on Live TV screen, just update state
+        setState(() {
+          _selectedTab = title;
+        });
+        break;
+    }
+  }
+
   Widget _buildFullLayout() {
     return Row(
       children: [
         // Left Panel - Groups
-        Expanded(
-          flex: 25,
+        Flexible(
+          flex: 3,
           child: _buildGroupPanel(),
         ),
         
         Container(width: 1, color: Colors.white.withOpacity(0.1)),
         
         // Middle Panel - Channels
-        Expanded(
-          flex: 35,
+        Flexible(
+          flex: 4,
           child: _buildChannelPanel(),
         ),
         
         Container(width: 1, color: Colors.white.withOpacity(0.1)),
         
         // Right Panel - Preview & EPG
-        Expanded(
-          flex: 40,
+        Flexible(
+          flex: 5,
           child: _buildPreviewPanel(),
         ),
       ],
@@ -410,7 +448,14 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            onTap: () => _selectChannel(channel),
+                            onTap: () {
+                              _selectChannel(channel);
+                            },
+                            onHover: (isHovering) {
+                              if (isHovering) {
+                                _selectChannel(channel);
+                              }
+                            },
                             onDoubleTap: () => _playChannel(channel),
                             borderRadius: BorderRadius.circular(12),
                             child: AnimatedContainer(
