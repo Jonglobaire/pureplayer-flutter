@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
 import '../models/channel.dart';
@@ -60,8 +59,8 @@ class _MoviesScreenState extends State<MoviesScreen>
     
     // Enable profiling in debug mode
     if (kDebugMode) {
-      // Enable profiling flags
-      WidgetsBinding.instance.debugProfileBuildsEnabled = true;
+      debugProfileBuildsEnabled = true;
+      debugProfilePaintsEnabled = true;
     }
     
     _focusAnimationController = AnimationController(
@@ -222,9 +221,6 @@ class _MoviesScreenState extends State<MoviesScreen>
                 scale: animation.value,
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeInOut,
-                scale: animation.value,
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOut,
                 child: FadeTransition(
                   opacity: animation,
                   child: _buildMovieModal(movie, progress, isPartiallyWatched),
@@ -234,7 +230,7 @@ class _MoviesScreenState extends State<MoviesScreen>
           ),
         );
       },
-    }).then((_) {
+    ).then((_) {
       if (kDebugMode) {
         final openTime = DateTime.now().difference(startTime).inMilliseconds;
         debugPrint('🎬 Movies: Modal opened in ${openTime}ms');
