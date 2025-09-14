@@ -24,7 +24,7 @@ if (flutterVersionName == null) {
 
 android {
     namespace "com.pure.player"
-    compileSdkVersion 34
+    compileSdkVersion 34  // Required for package_info_plus >= 9.0.0
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -42,8 +42,8 @@ android {
 
     defaultConfig {
         applicationId "com.pure.player"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        minSdkVersion flutter.minSdkVersion
+        targetSdkVersion 34  // Updated to match compileSdkVersion for compatibility
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
     }
