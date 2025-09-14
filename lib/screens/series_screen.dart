@@ -24,18 +24,16 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   String _selectedTab = 'Series';
-  String _selectedGroup = '';
-  Channel? _selectedChannel;
-  final ScrollController _groupScrollController = ScrollController();
-  final ScrollController _channelScrollController = ScrollController();
+  String _selectedCategory = '';
+  final ScrollController _categoryScrollController = ScrollController();
+  final ScrollController _gridScrollController = ScrollController();
   late AnimationController _focusAnimationController;
   late Animation<double> _focusAnimation;
   
   // State caching for Series
-  static String? _cachedSelectedGroup;
-  static Channel? _cachedSelectedChannel;
-  static double _cachedGroupScrollPosition = 0.0;
-  static double _cachedChannelScrollPosition = 0.0;
+  static String? _cachedSelectedCategory;
+  static double _cachedCategoryScrollPosition = 0.0;
+  static double _cachedGridScrollPosition = 0.0;
 
   @override
   void initState() {
@@ -48,48 +46,23 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
       CurvedAnimation(parent: _focusAnimationController, curve: Curves.easeInOut),
     );
     
-    // Auto-load Series group or restore cached state
-    if (_cachedSelectedGroup != null && _groupedChannels.containsKey(_cachedSelectedGroup)) {
-      _selectedGroup = _cachedSelectedGroup!;
-      if (_cachedSelectedChannel != null) {
-        final groupChannels = _groupedChannels[_selectedGroup]!;
-        if (groupChannels.contains(_cachedSelectedChannel)) {
-          _selectedChannel = _cachedSelectedChannel;
-        } else if (groupChannels.isNotEmpty) {
-          _selectedChannel = groupChannels.first;
-        }
-      }
+    // Auto-load Series category or restore cached state
+    if (_cachedSelectedCategory != null && _seriesCategories.contains(_cachedSelectedCategory)) {
+      _selectedCategory = _cachedSelectedCategory!;
     } else {
-      // Auto-load Series group
-      final seriesGroups = _groupedChannels.keys.where((group) => 
-        group.toLowerCase().contains('series') || 
-        group.toLowerCase().contains('tv show') ||
-        group.toLowerCase().contains('drama') ||
-        group.toLowerCase().contains('show')
-      ).toList();
-      
-      if (seriesGroups.isNotEmpty) {
-        _selectedGroup = seriesGroups.first;
-        final groupChannels = _groupedChannels[_selectedGroup]!;
-        if (groupChannels.isNotEmpty) {
-          _selectedChannel = groupChannels.first;
-        }
-      } else if (_groupedChannels.isNotEmpty) {
-        _selectedGroup = _groupedChannels.keys.first;
-        final groupChannels = _groupedChannels[_selectedGroup]!;
-        if (groupChannels.isNotEmpty) {
-          _selectedChannel = groupChannels.first;
-        }
+      // Auto-load first series category
+      if (_seriesCategories.isNotEmpty) {
+        _selectedCategory = _seriesCategories.first;
       }
     }
     
     // Restore scroll positions
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_groupScrollController.hasClients) {
-        _groupScrollController.jumpTo(_cachedGroupScrollPosition);
+      if (_categoryScrollController.hasClients) {
+        _categoryScrollController.jumpTo(_cachedCategoryScrollPosition);
       }
-      if (_channelScrollController.hasClients) {
-        _channelScrollController.jumpTo(_cachedChannelScrollPosition);
+      if (_gridScrollController.hasClients) {
+        _gridScrollController.jumpTo(_cachedGridScrollPosition);
       }
     });
     
@@ -98,24 +71,34 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
 
   List<Channel> get _filteredChannels {
     if (_searchQuery.isEmpty) {
-      return widget.channels;
+      return widget.channels.where((channel) => 
+        channel.group.toLowerCase().contains('series') || 
+        channel.group.toLowerCase().contains('tv show') ||
+        channel.group.toLowerCase().contains('drama') ||
+        channel.group.toLowerCase().contains('show')
+      ).toList();
     }
     return widget.channels.where((channel) =>
-      channel.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-      channel.group.toLowerCase().contains(_searchQuery.toLowerCase())
+      (channel.group.toLowerCase().contains('series') || 
+       channel.group.toLowerCase().contains('tv show') ||
+       channel.group.toLowerCase().contains('drama') ||
+       channel.group.toLowerCase().contains('show')) &&
+      (channel.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+       channel.group.toLowerCase().contains(_searchQuery.toLowerCase()))
     ).toList();
   }
 
-  Map<String, List<Channel>> get _groupedChannels {
-    final grouped = <String, List<Channel>>{};
+  List<String> get _seriesCategories {
+    final categories = <String>{};
     for (final channel in _filteredChannels) {
-      grouped.putIfAbsent(channel.group, () => []).add(channel);
+      categories.add(channel.group);
     }
-    return grouped;
+    return categories.toList()..sort();
   }
 
-  List<Channel> get _currentGroupChannels {
-    return _groupedChannels[_selectedGroup] ?? [];
+  List<Channel> get _currentCategorySeries {
+    if (_selectedCategory.isEmpty) return _filteredChannels;
+    return _filteredChannels.where((channel) => channel.group == _selectedCategory).toList();
   }
 
   void _playChannel(Channel channel) {
@@ -131,31 +114,11 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
     );
   }
 
-  void _selectGroup(String group) {
+  void _selectCategory(String category) {
     setState(() {
-      _selectedGroup = group;
-      _cachedSelectedGroup = group;
-      final groupChannels = _groupedChannels[group]!;
-      if (groupChannels.isNotEmpty) {
-        _selectedChannel = groupChannels.first;
-        _cachedSelectedChannel = _selectedChannel;
-      }
+      _selectedCategory = category;
+      _cachedSelectedCategory = category;
     });
-  }
-
-  void _selectChannel(Channel channel) {
-    setState(() {
-      _selectedChannel = channel;
-      _cachedSelectedChannel = channel;
-    });
-    // Auto-play preview when channel is selected
-    _previewChannel(channel);
-  }
-
-  void _previewChannel(Channel channel) {
-    // This would trigger auto-play in the preview panel
-    // For now, we'll just update the selected channel
-    // In a full implementation, this would start streaming the preview
   }
 
   void _showPlaylistUpdateSnackBar() {
@@ -173,7 +136,6 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    final isCompact = screenSize.width < 800;
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
@@ -181,7 +143,7 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
         children: [
           _buildTopBar(),
           Expanded(
-            child: isCompact ? _buildCompactLayout() : _buildFullLayout(),
+            child: _buildMainContent(),
           ),
         ],
       ),
@@ -381,671 +343,208 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
   }
 
   void _cacheCurrentState() {
-    _cachedSelectedGroup = _selectedGroup;
-    _cachedSelectedChannel = _selectedChannel;
-    if (_groupScrollController.hasClients) {
-      _cachedGroupScrollPosition = _groupScrollController.offset;
+    _cachedSelectedCategory = _selectedCategory;
+    if (_categoryScrollController.hasClients) {
+      _cachedCategoryScrollPosition = _categoryScrollController.offset;
     }
-    if (_channelScrollController.hasClients) {
-      _cachedChannelScrollPosition = _channelScrollController.offset;
+    if (_gridScrollController.hasClients) {
+      _cachedGridScrollPosition = _gridScrollController.offset;
     }
   }
 
-  Widget _buildFullLayout() {
-    final screenWidth = MediaQuery.of(context).size.width;
-    
-    return Row(
+  Widget _buildMainContent() {
+    return Column(
       children: [
-        // Left Panel - Groups
-        SizedBox(
-          width: screenWidth * 0.28, // 28% of screen width
-          child: _buildGroupPanel(),
-        ),
+        // Category Row
+        _buildCategoryRow(),
         
-        Container(width: 1, color: Colors.white.withOpacity(0.1)),
-        
-        // Middle Panel - Channels
-        SizedBox(
-          width: screenWidth * 0.32, // 32% of screen width
-          child: _buildChannelPanel(),
-        ),
-        
-        Container(width: 1, color: Colors.white.withOpacity(0.1)),
-        
-        // Right Panel - Preview & EPG
+        // Main Grid Content
         Expanded(
-          child: _buildPreviewPanel(),
+          child: _buildSeriesGrid(),
         ),
       ],
     );
   }
 
-  Widget _buildCompactLayout() {
-    return _buildChannelPanel(); // Simplified for compact screens
-  }
-
-  Widget _buildGroupPanel() {
+  Widget _buildCategoryRow() {
     return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
         border: Border(
-          right: BorderSide(
-            color: Colors.white.withOpacity(0.05),
+          bottom: BorderSide(
+            color: Colors.white.withOpacity(0.1),
             width: 1,
           ),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 4,
-            offset: const Offset(2, 0),
-          ),
-        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: MediaQuery.of(context).size.width * 0.02, // 2% padding
-              vertical: 20,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.3),
-              border: Border(
-                bottom: BorderSide(
-                  color: Colors.white.withOpacity(0.1),
-                  width: 1,
-                ),
+      child: _seriesCategories.isEmpty
+          ? const Center(
+              child: Text(
+                'No series categories available',
+                style: TextStyle(color: Colors.white70),
               ),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.add_circle_outline, color: Color(0xFFE50914), size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Add Group',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Groups List
-          Expanded(
-            child: Scrollbar(
+            )
+          : Scrollbar(
+              controller: _categoryScrollController,
               thumbVisibility: false,
-              controller: _groupScrollController,
               child: ListView.builder(
-              controller: _groupScrollController,
-                padding: EdgeInsets.symmetric(
-                  horizontal: MediaQuery.of(context).size.width * 0.015, // 1.5% padding
-                  vertical: 8,
-                ),
-              itemCount: _groupedChannels.length,
-              itemBuilder: (context, index) {
-                final groupName = _groupedChannels.keys.elementAt(index);
-                final channelCount = _groupedChannels[groupName]!.length;
-                final isSelected = _selectedGroup == groupName;
-                
-                return AnimatedBuilder(
-                  animation: _focusAnimation,
-                  builder: (context, child) {
-                    return Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => _selectGroup(groupName),
-                          borderRadius: BorderRadius.circular(12),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                              padding: EdgeInsets.symmetric(
-                                horizontal: MediaQuery.of(context).size.width * 0.02,
-                                vertical: 12,
-                              ),
-                            decoration: BoxDecoration(
+                controller: _categoryScrollController,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: _seriesCategories.length,
+                itemBuilder: (context, index) {
+                  final category = _seriesCategories[index];
+                  final isSelected = _selectedCategory == category;
+                  
+                  return Container(
+                    margin: const EdgeInsets.only(right: 12),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _selectCategory(category),
+                        borderRadius: BorderRadius.circular(20),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected 
+                                ? const Color(0xFFE50914)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
                               color: isSelected 
-                                  ? const Color(0xFFE50914).withOpacity(0.2)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isSelected 
-                                    ? const Color(0xFFE50914)
-                                    : Colors.transparent,
-                                width: 1,
-                              ),
-                              boxShadow: isSelected ? [
-                                BoxShadow(
-                                  color: const Color(0xFFE50914).withOpacity(0.3),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ] : null,
+                                  ? const Color(0xFFE50914)
+                                  : Colors.white.withOpacity(0.3),
+                              width: 1,
                             ),
-                            child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    groupName,
-                                    style: TextStyle(
-                                      color: isSelected ? Colors.white : Colors.white.withOpacity(0.8),
-                                      fontSize: 14,
-                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.left,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: isSelected 
-                                        ? const Color(0xFFE50914)
-                                        : Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    '$channelCount',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                          ),
+                          child: Text(
+                            category,
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : Colors.white.withOpacity(0.8),
+                              fontSize: 14,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                             ),
                           ),
                         ),
                       ),
-                    );
-                  },
-                );
-              },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChannelPanel() {
-    return Container(
-      color: const Color(0xFF121212),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Text(
-              _selectedGroup.isNotEmpty ? _selectedGroup : 'All Series',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          
-          // Channels List
-          Expanded(
-            child: _currentGroupChannels.isEmpty
-                ? _buildEmptyChannelState()
-                : Scrollbar(
-                    thumbVisibility: false,
-                    controller: _channelScrollController,
-                    child: ListView.builder(
-                      controller: _channelScrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      itemCount: _currentGroupChannels.length,
-                      itemBuilder: (context, index) {
-                      final channel = _currentGroupChannels[index];
-                      final isSelected = _selectedChannel == channel;
-                      
-                      return Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              _selectChannel(channel);
-                            },
-                            onHover: (isHovering) {
-                              if (isHovering) {
-                                _selectChannel(channel);
-                              }
-                            },
-                            onDoubleTap: () => _playChannel(channel),
-                            borderRadius: BorderRadius.circular(12),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: isSelected 
-                                    ? Colors.white.withOpacity(0.1)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: isSelected 
-                                      ? const Color(0xFFE50914)
-                                      : Colors.transparent,
-                                  width: 2,
-                                ),
-                                boxShadow: isSelected ? [
-                                  BoxShadow(
-                                    color: const Color(0xFFE50914).withOpacity(0.4),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ] : null,
-                              ),
-                              child: Row(
-                                children: [
-                                  // Channel Number
-                                  Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFE50914).withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        '${index + 1}',
-                                        style: const TextStyle(
-                                          color: Color(0xFFE50914),
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  
-                                  // Channel Logo
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: channel.logo.isNotEmpty
-                                        ? Image.network(
-                                            channel.logo,
-                                            width: 50,
-                                            height: 50,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (context, error, stackTrace) {
-                                              return _buildDefaultChannelIcon();
-                                            },
-                                          )
-                                        : _buildDefaultChannelIcon(),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  
-                                  // Channel Info
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          channel.name,
-                                          style: TextStyle(
-                                            color: isSelected ? Colors.white : Colors.white.withOpacity(0.9),
-                                            fontSize: 16,
-                                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Series • ${channel.group}',
-                                          style: TextStyle(
-                                            color: Colors.white.withOpacity(0.6),
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  
-                                  // Play Button
-                                  if (isSelected)
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFE50914),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: const Icon(
-                                        Icons.play_arrow,
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
                     ),
-                  ),
+                  );
+                },
+              ),
+            ),
+    );
+  }
+
+  Widget _buildSeriesGrid() {
+    if (_currentCategorySeries.isEmpty) {
+      return Center(
+        child: Text(
+          'No content available in this category',
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.6),
+            fontSize: 16,
           ),
-        ],
+        ),
+      );
+    }
+
+    return Scrollbar(
+      controller: _gridScrollController,
+      thumbVisibility: false,
+      child: SingleChildScrollView(
+        controller: _gridScrollController,
+        padding: const EdgeInsets.all(16),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Responsive grid calculation
+            int crossAxisCount;
+            if (constraints.maxWidth > 1200) {
+              crossAxisCount = 4; // TV/Large screens
+            } else if (constraints.maxWidth > 800) {
+              crossAxisCount = 3; // Tablet
+            } else {
+              crossAxisCount = 2; // Small devices
+            }
+
+            return GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: crossAxisCount,
+              childAspectRatio: 2 / 3, // Poster aspect ratio
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 20,
+              children: _currentCategorySeries.map((series) => _buildSeriesCard(series)).toList(),
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildPreviewPanel() {
-    return Container(
-      color: const Color(0xFF1A1A1A),
-      child: Column(
-        children: [
-          // Preview Player
-          Expanded(
-            flex: 3,
-            child: Container(
-              margin: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
-              ),
-              child: _selectedChannel != null
-                  ? _buildChannelPreview(_selectedChannel!)
-                  : _buildNoChannelSelected(),
-            ),
-          ),
-          
-          // EPG Section
-          Expanded(
-            flex: 2,
-            child: _buildEPGSection(),
-          ),
-          
-          // Action Buttons
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: _buildActionButtons(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChannelPreview(Channel channel) {
-    return Stack(
-      children: [
-        Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black.withOpacity(0.3),
-                Colors.black.withOpacity(0.8),
-              ],
-            ),
-          ),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (channel.logo.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      channel.logo,
-                      width: 80,
-                      height: 80,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.tv, color: Colors.white, size: 80);
-                      },
-                    ),
-                  )
-                else
-                  const Icon(Icons.tv, color: Colors.white, size: 80),
-                const SizedBox(height: 16),
-                Text(
-                  channel.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Preview Mode',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        
-        // Play Overlay
-        Positioned.fill(
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => _playChannel(channel),
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.black.withOpacity(0.3),
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.play_circle_filled,
-                    color: Color(0xFFE50914),
-                    size: 64,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNoChannelSelected() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.tv_outlined,
-            color: Colors.white.withOpacity(0.5),
-            size: 64,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Select a series to preview',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 16,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEPGSection() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _selectedChannel?.name ?? 'Select a series',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          
-          Expanded(
-            child: _selectedChannel != null
-                ? _buildSeriesInfo()
-                : Center(
-                    child: Text(
-                      'Select a series to view details',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.6),
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSeriesInfo() {
-    // Mock series info - in real app, this would come from series metadata
-    final seriesInfo = [
-      {'label': 'Genre', 'value': 'Drama, Thriller'},
-      {'label': 'Seasons', 'value': '5 Seasons'},
-      {'label': 'Episodes', 'value': '60 Episodes'},
-      {'label': 'Rating', 'value': '9.2/10'},
-    ];
-
-    return ListView.builder(
-      itemCount: seriesInfo.length,
-      itemBuilder: (context, index) {
-        final info = seriesInfo[index];
-        
-        return Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Text(
-                info['label'] as String,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  info['value'] as String,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildActionButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildActionButton(
-            'Watch List',
-            Icons.playlist_add,
-            true,
-            () {
-              // Handle watch list
-            },
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildActionButton(
-            'Favorites',
-            Icons.favorite_border,
-            true,
-            () {
-              // Handle add to favorites
-            },
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildActionButton(
-            'Search',
-            Icons.search,
-            true,
-            () {
-              // Handle search
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButton(String title, IconData icon, bool enabled, VoidCallback onTap) {
+  Widget _buildSeriesCard(Channel series) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(8),
+        onTap: () => _playChannel(series),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: enabled 
-                ? Colors.white.withOpacity(0.1)
-                : Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(8),
+            color: const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: enabled 
-                  ? Colors.white.withOpacity(0.2)
-                  : Colors.white.withOpacity(0.1),
+              color: Colors.white.withOpacity(0.1),
+              width: 1,
             ),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(
-                icon,
-                color: enabled ? Colors.white : Colors.white.withOpacity(0.5),
-                size: 20,
+              // Series Poster
+              Expanded(
+                flex: 4,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    child: series.logo.isNotEmpty
+                        ? Image.network(
+                            series.logo,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return _buildDefaultSeriesPoster();
+                            },
+                          )
+                        : _buildDefaultSeriesPoster(),
+                  ),
+                ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                style: TextStyle(
-                  color: enabled ? Colors.white : Colors.white.withOpacity(0.5),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+              
+              // Series Title
+              Expanded(
+                flex: 1,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        series.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -1055,49 +554,15 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
     );
   }
 
-  Widget _buildDefaultChannelIcon() {
+  Widget _buildDefaultSeriesPoster() {
     return Container(
-      width: 50,
-      height: 50,
-      decoration: BoxDecoration(
-        color: Colors.grey[700],
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: const Icon(Icons.tv, color: Colors.white, size: 24),
-    );
-  }
-
-  Widget _buildEmptyChannelState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.tv_outlined,
-            size: 64,
-            color: Colors.white.withOpacity(0.5),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No series in this group',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 18,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () {
-              if (_groupedChannels.isNotEmpty) {
-                _selectGroup(_groupedChannels.keys.first);
-              }
-            },
-            child: const Text(
-              'Select another group',
-              style: TextStyle(color: Color(0xFFE50914)),
-            ),
-          ),
-        ],
+      color: Colors.grey[800],
+      child: const Center(
+        child: Icon(
+          Icons.tv,
+          color: Colors.white54,
+          size: 48,
+        ),
       ),
     );
   }
@@ -1107,8 +572,8 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
     // Cache current state before disposing
     _cacheCurrentState();
     _searchController.dispose();
-    _groupScrollController.dispose();
-    _channelScrollController.dispose();
+    _categoryScrollController.dispose();
+    _gridScrollController.dispose();
     _focusAnimationController.dispose();
     super.dispose();
   }
