@@ -57,12 +57,6 @@ class _MoviesScreenState extends State<MoviesScreen>
   void initState() {
     super.initState();
     
-    // Enable profiling in debug mode
-    if (kDebugMode) {
-      debugProfileBuildsEnabled = true;
-      debugProfilePaintsEnabled = true;
-    }
-    
     _focusAnimationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -230,7 +224,10 @@ class _MoviesScreenState extends State<MoviesScreen>
           ),
         );
       },
-    ).then((_) {
+    );
+    
+    // Log modal opening time
+    modal.then((_) {
       if (kDebugMode) {
         final openTime = DateTime.now().difference(startTime).inMilliseconds;
         debugPrint('🎬 Movies: Modal opened in ${openTime}ms');

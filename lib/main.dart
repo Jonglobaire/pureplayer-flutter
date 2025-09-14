@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Enable profiling in debug mode
+  if (kDebugMode) {
+    debugProfileBuildsEnabled = true;
+    debugProfilePaintsEnabled = true;
+  }
   
   // Force landscape orientation globally
   await SystemChrome.setPreferredOrientations([
