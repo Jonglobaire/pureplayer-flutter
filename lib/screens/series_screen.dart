@@ -112,15 +112,31 @@ class _SeriesScreenState extends State<SeriesScreen>
   }
 
   List<String> get _seriesGroups {
-    final groups = <String>{};
+    final groups = <String>['⭐ Favorites', '⏳ Last Watched'];
+    final seriesGroups = <String>{};
     for (final series in _filteredSeries) {
-      groups.add(series.group);
+      seriesGroups.add(series.group);
     }
-    return groups.toList()..sort();
+    groups.addAll(seriesGroups.toList()..sort());
+    return groups;
   }
 
   List<Channel> get _currentGroupSeries {
     if (_selectedGroup.isEmpty) return _filteredSeries;
+    
+    if (_selectedGroup == '⭐ Favorites') {
+      return _filteredSeries.where((series) => _contentProvider.isFavorite(series.url)).toList();
+    }
+    
+    if (_selectedGroup == '⏳ Last Watched') {
+      return _contentProvider.getRecentlyWatched().where((series) => 
+        series.group.toLowerCase().contains('series') || 
+        series.group.toLowerCase().contains('tv show') ||
+        series.group.toLowerCase().contains('drama') ||
+        series.group.toLowerCase().contains('show')
+      ).toList();
+    }
+    
     return _filteredSeries.where((series) => series.group == _selectedGroup).toList();
   }
 
@@ -251,24 +267,29 @@ class _SeriesScreenState extends State<SeriesScreen>
                 // Series poster
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: SizedBox(
-                    width: 120,
-                    height: 180,
-                    child: series.logo.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: series.logo,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              color: Colors.grey[800],
-                              child: const Center(
-                                child: CircularProgressIndicator(
-                                  color: Color(0xFFE50914),
+                  child: AspectRatio(
+                    aspectRatio: 2/3,
+                    child: SizedBox(
+                      width: 120,
+                      child: series.logo.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: series.logo,
+                              fit: BoxFit.cover,
+                              fadeInDuration: const Duration(milliseconds: 300),
+                              memCacheHeight: 600,
+                              memCacheWidth: 400,
+                              placeholder: (context, url) => Container(
+                                color: Colors.grey[800],
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    color: Color(0xFFE50914),
+                                  ),
                                 ),
                               ),
-                            ),
-                            errorWidget: (context, url, error) => _buildDefaultPoster(),
-                          )
-                        : _buildDefaultPoster(),
+                              errorWidget: (context, url, error) => _buildDefaultPoster(),
+                            )
+                          : _buildDefaultPoster(),
+                    ),
                   ),
                 ),
                 
@@ -394,6 +415,9 @@ class _SeriesScreenState extends State<SeriesScreen>
                                                 ? CachedNetworkImage(
                                                     imageUrl: episode.logo,
                                                     fit: BoxFit.cover,
+                                                    fadeInDuration: const Duration(milliseconds: 300),
+                                                    memCacheHeight: 600,
+                                                    memCacheWidth: 400,
                                                     placeholder: (context, url) => Container(
                                                       color: Colors.grey[800],
                                                       child: const Center(

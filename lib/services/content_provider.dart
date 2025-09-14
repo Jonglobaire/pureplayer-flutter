@@ -10,6 +10,10 @@ class ContentProvider extends ChangeNotifier {
   factory ContentProvider() => _instance;
   ContentProvider._internal();
 
+  // Favorites functionality
+  static const String _favoritesKey = 'favorite_items';
+  List<String> _favorites = [];
+
   // Cache data
   List<Channel> _allChannels = [];
   List<Channel> _movies = [];
@@ -32,6 +36,34 @@ class ContentProvider extends ChangeNotifier {
   List<Channel> get movies => _movies;
   List<Channel> get series => _series;
   
+  /// Load favorites from SharedPreferences
+  Future<void> _loadFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    _favorites = prefs.getStringList(_favoritesKey) ?? [];
+  }
+
+  /// Check if item is favorite
+  bool isFavorite(String url) {
+    return _favorites.contains(url);
+  }
+
+  /// Toggle favorite status
+  Future<void> toggleFavorite(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (_favorites.contains(url)) {
+      _favorites.remove(url);
+    } else {
+      _favorites.add(url);
+    }
+
+    await prefs.setStringList(_favoritesKey, _favorites);
+    notifyListeners();
+  }
+
+  /// Get list of favorite URLs
+  List<String> getFavorites() => _favorites;
+
   /// Initialize content provider with M3U data
   Future<void> initialize(String playlistUrl) async {
     if (_isLoading) return;
@@ -42,6 +74,9 @@ class ContentProvider extends ChangeNotifier {
     try {
       // Load cached data first for instant UI
       await _loadCachedData();
+      
+      // Load favorites
+      await _loadFavorites();
       
       // Fetch fresh data in background
       _fetchFreshData(playlistUrl);
