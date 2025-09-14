@@ -10,11 +10,23 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  http: ^1.1.0
-  better_player: ^0.0.84
-  cupertino_icons: ^1.0.2
-  device_info_plus: ^9.1.0
-  flutter_launcher_icons: ^0.14.4
+
+  # core libs
+  intl: 0.20.2
+  http: 1.1.0
+  flutter_svg: 2.1.0
+  shared_preferences: 2.5.3
+  url_launcher: 6.3.1
+
+  # UI / media
+  cached_network_image: 3.3.1
+  better_player: 0.0.84
+  cupertino_icons: ^1.0.8
+
+  # device + icons
+  device_info_plus: ^9.1.2
+  flutter_launcher_icons: 0.14.4
+
 
 dev_dependencies:
   flutter_test:
@@ -25,6 +37,12 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/images/tv.svg
+    - assets/images/movies.svg
+    - assets/images/series.svg
+    - assets/images/users.svg
+    - assets/images/switch_user.svg
+    - assets/images/bg.png
 
 flutter_launcher_icons:
   android: true
