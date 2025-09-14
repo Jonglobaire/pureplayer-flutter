@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:async';
 import '../models/channel.dart';
 import '../services/content_provider.dart';
 import 'player_screen.dart';
@@ -22,7 +23,12 @@ class SeriesScreen extends StatefulWidget {
   State<SeriesScreen> createState() => _SeriesScreenState();
 }
 
-class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMixin {
+class _SeriesScreenState extends State<SeriesScreen> 
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  
+  @override
+  bool get wantKeepAlive => true;
+
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   String _selectedTab = 'Series';
@@ -31,6 +37,12 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
   final ScrollController _gridScrollController = ScrollController();
   late AnimationController _focusAnimationController;
   late Animation<double> _focusAnimation;
+  
+  // Search functionality
+  Timer? _debounceTimer;
+  bool _isSearching = false;
+  List<String> _searchHistory = [];
+  bool _showSearchHistory = false;
   
   // Content provider
   final ContentProvider _contentProvider = ContentProvider();
@@ -58,7 +70,6 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
   Future<void> _initializeContent() async {
     // Initialize content provider if needed
     if (!_contentProvider.isInitialized && widget.channels.isNotEmpty) {
-      // Use first channel URL to get playlist URL (simplified)
       await _contentProvider.initialize('');
     }
     
@@ -120,14 +131,71 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
     });
   }
 
+  void _onSearchChanged(String value) {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    
+    setState(() {
+      _isSearching = true;
+      _showSearchHistory = value.isEmpty;
+    });
+    
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _searchQuery = value;
+        _isSearching = false;
+        _showSearchHistory = false;
+      });
+      
+      if (value.isNotEmpty && !_searchHistory.contains(value)) {
+        _searchHistory.insert(0, value);
+        if (_searchHistory.length > 5) {
+          _searchHistory.removeLast();
+        }
+      }
+    });
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() {
+      _searchQuery = '';
+      _isSearching = false;
+      _showSearchHistory = false;
+    });
+  }
+
+  void _preloadImages() {
+    for (int i = 0; i < _currentGroupSeries.length && i < 10; i++) {
+      final series = _currentGroupSeries[i];
+      if (series.logo.isNotEmpty) {
+        precacheImage(CachedNetworkImageProvider(series.logo), context);
+      }
+    }
+  }
+
   void _showSeriesModal(Channel series) {
     final episodes = _getSeriesEpisodes(series);
     
-    showModalBottomSheet(
+    showGeneralDialog(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => _buildSeriesModal(series, episodes),
+      barrierDismissible: true,
+      barrierLabel: 'Series Details',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: AnimatedScale(
+              scale: animation.value,
+              child: FadeTransition(
+                opacity: animation,
+                child: _buildSeriesModal(series, episodes),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -141,21 +209,34 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
 
   Widget _buildSeriesModal(Channel series, List<Channel> episodes) {
     return Container(
+      width: MediaQuery.of(context).size.width * 0.9,
       height: MediaQuery.of(context).size.height * 0.8,
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.5),
+            blurRadius: 20,
+            spreadRadius: 5,
+          ),
+        ],
       ),
       child: Column(
         children: [
-          // Handle bar
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(2),
+          // Close button
+          Align(
+            alignment: Alignment.topRight,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close, color: Colors.white, size: 24),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black.withOpacity(0.5),
+                  shape: const CircleBorder(),
+                ),
+              ),
             ),
           ),
           
@@ -281,6 +362,7 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
                         final isCompleted = _contentProvider.isCompleted(episode.url);
                         
                         return Container(
+                          key: ValueKey('episode_${episode.url}'),
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.05),
@@ -296,127 +378,131 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
                               borderRadius: BorderRadius.circular(8),
                               child: Padding(
                                 padding: const EdgeInsets.all(12),
-                                child: Row(
+                                child: Column(
                                   children: [
-                                    // Episode thumbnail
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(6),
-                                      child: SizedBox(
-                                        width: 80,
-                                        height: 45,
-                                        child: episode.logo.isNotEmpty
-                                            ? CachedNetworkImage(
-                                                imageUrl: episode.logo,
-                                                fit: BoxFit.cover,
-                                                placeholder: (context, url) => Container(
-                                                  color: Colors.grey[800],
-                                                  child: const Center(
-                                                    child: Icon(
-                                                      Icons.tv,
-                                                      color: Colors.white54,
-                                                      size: 20,
+                                    Row(
+                                      children: [
+                                        // Episode thumbnail
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(6),
+                                          child: SizedBox(
+                                            width: 80,
+                                            height: 45,
+                                            child: episode.logo.isNotEmpty
+                                                ? CachedNetworkImage(
+                                                    imageUrl: episode.logo,
+                                                    fit: BoxFit.cover,
+                                                    placeholder: (context, url) => Container(
+                                                      color: Colors.grey[800],
+                                                      child: const Center(
+                                                        child: Icon(
+                                                          Icons.tv,
+                                                          color: Colors.white54,
+                                                          size: 20,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    errorWidget: (context, url, error) => Container(
+                                                      color: Colors.grey[800],
+                                                      child: const Center(
+                                                        child: Icon(
+                                                          Icons.tv,
+                                                          color: Colors.white54,
+                                                          size: 20,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  )
+                                                : Container(
+                                                    color: Colors.grey[800],
+                                                    child: const Center(
+                                                      child: Icon(
+                                                        Icons.tv,
+                                                        color: Colors.white54,
+                                                        size: 20,
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
-                                                errorWidget: (context, url, error) => Container(
-                                                  color: Colors.grey[800],
-                                                  child: const Center(
-                                                    child: Icon(
-                                                      Icons.tv,
-                                                      color: Colors.white54,
-                                                      size: 20,
-                                                    ),
-                                                  ),
-                                                ),
-                                              )
-                                            : Container(
-                                                color: Colors.grey[800],
-                                                child: const Center(
-                                                  child: Icon(
-                                                    Icons.tv,
-                                                    color: Colors.white54,
-                                                    size: 20,
-                                                  ),
-                                                ),
-                                              ),
-                                      ),
-                                    ),
-                                    
-                                    const SizedBox(width: 12),
-                                    
-                                    // Episode info
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
+                                          ),
+                                        ),
+                                        
+                                        const SizedBox(width: 12),
+                                        
+                                        // Episode info
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Expanded(
-                                                child: Text(
-                                                  episode.name,
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              
-                                              // Continue/Completed indicator
-                                              if (isPartiallyWatched)
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFFE50914),
-                                                    borderRadius: BorderRadius.circular(4),
-                                                  ),
-                                                  child: const Text(
-                                                    'Continue',
-                                                    style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      episode.name,
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 14,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
                                                   ),
-                                                )
-                                              else if (isCompleted)
-                                                const Icon(
-                                                  Icons.check_circle,
-                                                  color: Colors.green,
-                                                  size: 16,
-                                                ),
+                                                  
+                                                  // Continue/Completed indicator
+                                                  if (isPartiallyWatched)
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(0xFFE50914),
+                                                        borderRadius: BorderRadius.circular(4),
+                                                      ),
+                                                      child: const Text(
+                                                        'Continue',
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    )
+                                                  else if (isCompleted)
+                                                    const Icon(
+                                                      Icons.check_circle,
+                                                      color: Colors.green,
+                                                      size: 16,
+                                                    ),
+                                                ],
+                                              ),
                                             ],
                                           ),
-                                          
-                                          const SizedBox(height: 4),
-                                          
-                                          // Progress bar
-                                          if (progress > 0.0)
-                                            LinearProgressIndicator(
-                                              value: progress,
-                                              backgroundColor: Colors.white.withOpacity(0.2),
-                                              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFE50914)),
-                                              minHeight: 2,
-                                            ),
-                                        ],
-                                      ),
+                                        ),
+                                        
+                                        // Play button
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFE50914).withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child: const Icon(
+                                            Icons.play_arrow,
+                                            color: Color(0xFFE50914),
+                                            size: 16,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                     
-                                    // Play button
-                                    Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFE50914).withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(20),
+                                    // Progress indicator under episode title
+                                    if (progress > 0.0) ...[
+                                      const SizedBox(height: 8),
+                                      LinearProgressIndicator(
+                                        value: progress,
+                                        backgroundColor: Colors.white.withOpacity(0.2),
+                                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFE50914)),
+                                        minHeight: 2,
                                       ),
-                                      child: const Icon(
-                                        Icons.play_arrow,
-                                        color: Color(0xFFE50914),
-                                        size: 16,
-                                      ),
-                                    ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -461,8 +547,77 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
     );
   }
 
+  Widget _buildHighlightedText(String text, String query) {
+    if (query.isEmpty) {
+      return Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+      );
+    }
+
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    final index = lowerText.indexOf(lowerQuery);
+
+    if (index == -1) {
+      return Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+      );
+    }
+
+    return RichText(
+      text: TextSpan(
+        children: [
+          TextSpan(
+            text: text.substring(0, index),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          TextSpan(
+            text: text.substring(index, index + query.length),
+            style: const TextStyle(
+              color: Color(0xFFE50914),
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          TextSpan(
+            text: text.substring(index + query.length),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       body: Column(
@@ -519,65 +674,124 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
             // Search Bar
             Flexible(
               flex: 1,
-              child: Container(
-                height: 40,
-                constraints: BoxConstraints(
-                  maxWidth: screenWidth * 0.25,
-                  minWidth: 200,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
-                    width: 1.5,
+              child: Stack(
+                children: [
+                  Container(
+                    height: 40,
+                    constraints: BoxConstraints(
+                      maxWidth: screenWidth * 0.25,
+                      minWidth: 200,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'Search series...',
+                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+                        prefixIcon: _isSearching
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: Padding(
+                                  padding: EdgeInsets.all(10),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFFE50914),
+                                  ),
+                                ),
+                              )
+                            : Icon(
+                                Icons.search, 
+                                color: Colors.white.withOpacity(0.6), 
+                                size: 20,
+                              ),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(
+                                  Icons.clear, 
+                                  color: Colors.white.withOpacity(0.6), 
+                                  size: 18,
+                                ),
+                                onPressed: _clearSearch,
+                              )
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, 
+                          vertical: 8,
+                        ),
+                      ),
+                      onChanged: _onSearchChanged,
+                      onTap: () {
+                        setState(() {
+                          _showSearchHistory = _searchController.text.isEmpty;
+                        });
+                      },
+                    ),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: 'Search series...',
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-                    prefixIcon: Icon(
-                      Icons.search, 
-                      color: Colors.white.withOpacity(0.6), 
-                      size: 20,
-                    ),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(
-                              Icons.clear, 
-                              color: Colors.white.withOpacity(0.6), 
-                              size: 18,
+                  
+                  // Search history dropdown
+                  if (_showSearchHistory && _searchHistory.isNotEmpty)
+                    Positioned(
+                      top: 45,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A1A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white.withOpacity(0.1)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
                             ),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _searchQuery = '';
-                              });
-                            },
-                          )
-                        : null,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, 
-                      vertical: 8,
+                          ],
+                        ),
+                        child: Column(
+                          children: _searchHistory.map((query) => 
+                            InkWell(
+                              onTap: () {
+                                _searchController.text = query;
+                                _onSearchChanged(query);
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.history, color: Colors.white54, size: 16),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        query,
+                                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ).toList(),
+                        ),
+                      ),
                     ),
-                  ),
-                  onChanged: (value) {
-                    setState(() {
-                      _searchQuery = value;
-                    });
-                  },
-                ),
+                ],
               ),
             ),
           ],
@@ -745,9 +959,10 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
                     itemBuilder: (context, index) {
                       final group = _seriesGroups[index];
                       final isSelected = _selectedGroup == group;
-                      final seriesCount = _currentGroupSeries.length;
+                      final seriesCount = _filteredSeries.where((s) => s.group == group).length;
                       
                       return Container(
+                        key: ValueKey('group_$group'),
                         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         child: Material(
                           color: Colors.transparent,
@@ -816,55 +1031,83 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
 
   Widget _buildSeriesGrid() {
     if (_currentGroupSeries.isEmpty) {
-      return const Center(
-        child: Text(
-          'No content available in this category',
-          style: TextStyle(
-            color: Colors.white60,
-            fontSize: 16,
-          ),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.search_off,
+              size: 64,
+              color: Colors.white.withOpacity(0.5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _searchQuery.isNotEmpty 
+                  ? 'No results found for "$_searchQuery"'
+                  : 'No content available in this category',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 16,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       );
     }
 
-    return Scrollbar(
-      controller: _gridScrollController,
-      thumbVisibility: false,
-      child: SingleChildScrollView(
-        controller: _gridScrollController,
-        padding: const EdgeInsets.all(20),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // Responsive grid calculation
-            int crossAxisCount;
-            if (constraints.maxWidth > 1200) {
-              crossAxisCount = 4;
-            } else if (constraints.maxWidth > 800) {
-              crossAxisCount = 3;
-            } else {
-              crossAxisCount = 2;
-            }
+    // Preload images for smooth scrolling
+    WidgetsBinding.instance.addPostFrameCallback((_) => _preloadImages());
 
-            return GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: crossAxisCount,
-              childAspectRatio: 2 / 3,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 20,
-              children: _currentGroupSeries.map((series) => _buildSeriesCard(series)).toList(),
-            );
-          },
+    return PageStorage(
+      bucket: PageStorageBucket(),
+      child: Scrollbar(
+        controller: _gridScrollController,
+        thumbVisibility: false,
+        child: SingleChildScrollView(
+          key: const PageStorageKey('series_grid'),
+          controller: _gridScrollController,
+          padding: const EdgeInsets.all(20),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Responsive grid calculation
+              int crossAxisCount;
+              if (constraints.maxWidth > 1200) {
+                crossAxisCount = 4;
+              } else if (constraints.maxWidth > 800) {
+                crossAxisCount = 3;
+              } else {
+                crossAxisCount = 2;
+              }
+
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  childAspectRatio: 16 / 9,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 20,
+                ),
+                itemCount: _currentGroupSeries.length,
+                itemBuilder: (context, index) {
+                  final series = _currentGroupSeries[index];
+                  return _buildSeriesCard(series, index);
+                },
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSeriesCard(Channel series) {
+  Widget _buildSeriesCard(Channel series, int index) {
     final progress = _contentProvider.getWatchProgress(series.url);
     final isPartiallyWatched = _contentProvider.isPartiallyWatched(series.url);
     
     return Material(
+      key: ValueKey('series_${series.url}'),
       color: Colors.transparent,
       child: InkWell(
         onTap: () => _showSeriesModal(series),
@@ -891,7 +1134,7 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
                     ClipRRect(
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                       child: AspectRatio(
-                        aspectRatio: 2 / 3,
+                        aspectRatio: 16 / 9,
                         child: series.logo.isNotEmpty
                             ? CachedNetworkImage(
                                 imageUrl: series.logo,
@@ -942,17 +1185,7 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
                   color: Color(0xFF1A1A1A),
                   borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
                 ),
-                child: Text(
-                  series.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
+                child: _buildHighlightedText(series.name, _searchQuery),
               ),
             ],
           ),
@@ -964,6 +1197,7 @@ class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMix
   @override
   void dispose() {
     _cacheCurrentState();
+    _debounceTimer?.cancel();
     _searchController.dispose();
     _groupScrollController.dispose();
     _gridScrollController.dispose();
