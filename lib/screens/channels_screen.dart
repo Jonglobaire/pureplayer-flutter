@@ -131,44 +131,68 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
   }
 
   Widget _buildTopBar() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return Container(
       height: 80,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF1A1A1A), Color(0xFF121212)],
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.6),
+        border: Border(
+          bottom: BorderSide(
+            color: Colors.white.withOpacity(0.1),
+            width: 1,
+          ),
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: EdgeInsets.symmetric(
+          horizontal: screenWidth * 0.03, // 3% horizontal padding
+          vertical: 16,
+        ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Navigation Tabs
-            Flexible(
-              flex: 3,
+            // Navigation Tabs - evenly spaced
+            Expanded(
+              flex: 6,
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildTabButton('Home'),
-                  const SizedBox(width: 32),
                   _buildTabButton('Live TV'),
-                  const SizedBox(width: 32),
                   _buildTabButton('Movies'),
-                  const SizedBox(width: 32),
                   _buildTabButton('Series'),
                 ],
               ),
             ),
             
-            // Search Bar
-            Flexible(
-              flex: 1,
+            const SizedBox(width: 24),
+            
+            // Search Bar - responsive width
+            Expanded(
+              flex: 3,
               child: Container(
                 height: 40,
+                constraints: BoxConstraints(
+                  maxWidth: screenWidth * 0.25, // Max 25% of screen width
+                  minWidth: 200, // Minimum width for usability
+                ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.black.withOpacity(0.4),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: TextField(
                   controller: _searchController,
@@ -176,10 +200,18 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
                   decoration: InputDecoration(
                     hintText: 'Search channels...',
                     hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-                    prefixIcon: Icon(Icons.search, color: Colors.white.withOpacity(0.6), size: 20),
+                    prefixIcon: Icon(
+                      Icons.search, 
+                      color: Colors.white.withOpacity(0.6), 
+                      size: 20,
+                    ),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
-                            icon: Icon(Icons.clear, color: Colors.white.withOpacity(0.6), size: 18),
+                            icon: Icon(
+                              Icons.clear, 
+                              color: Colors.white.withOpacity(0.6), 
+                              size: 18,
+                            ),
                             onPressed: () {
                               _searchController.clear();
                               setState(() {
@@ -189,7 +221,10 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
                           )
                         : null,
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, 
+                      vertical: 8,
+                    ),
                   ),
                   onChanged: (value) {
                     setState(() {
@@ -266,27 +301,28 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
   }
 
   Widget _buildFullLayout() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return Row(
       children: [
         // Left Panel - Groups
-        Flexible(
-          flex: 3,
+        SizedBox(
+          width: screenWidth * 0.28, // 28% of screen width
           child: _buildGroupPanel(),
         ),
         
         Container(width: 1, color: Colors.white.withOpacity(0.1)),
         
         // Middle Panel - Channels
-        Flexible(
-          flex: 4,
+        SizedBox(
+          width: screenWidth * 0.32, // 32% of screen width
           child: _buildChannelPanel(),
         ),
         
         Container(width: 1, color: Colors.white.withOpacity(0.1)),
         
         // Right Panel - Preview & EPG
-        Flexible(
-          flex: 5,
+        Expanded(
           child: _buildPreviewPanel(),
         ),
       ],
@@ -298,14 +334,43 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
   }
 
   Widget _buildGroupPanel() {
+    final screenHeight = MediaQuery.of(context).size.height;
+    
     return Container(
-      color: const Color(0xFF1A1A1A),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        border: Border(
+          right: BorderSide(
+            color: Colors.white.withOpacity(0.05),
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(2, 0),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          Padding(
-            padding: const EdgeInsets.all(20),
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: MediaQuery.of(context).size.width * 0.02, // 2% padding
+              vertical: 20,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.white.withOpacity(0.1),
+                  width: 1,
+                ),
+              ),
+            ),
             child: Row(
               children: [
                 const Icon(Icons.add_circle_outline, color: Color(0xFFE50914), size: 20),
@@ -324,9 +389,14 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
           
           // Groups List
           Expanded(
-            child: ListView.builder(
+            child: Scrollbar(
+              thumbVisibility: false,
+              child: ListView.builder(
               controller: _groupScrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: EdgeInsets.symmetric(
+                  horizontal: MediaQuery.of(context).size.width * 0.015, // 1.5% padding
+                  vertical: 8,
+                ),
               itemCount: _groupedChannels.length,
               itemBuilder: (context, index) {
                 final groupName = _groupedChannels.keys.elementAt(index);
@@ -345,7 +415,10 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
                           borderRadius: BorderRadius.circular(12),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: MediaQuery.of(context).size.width * 0.02,
+                                vertical: 12,
+                              ),
                             decoration: BoxDecoration(
                               color: isSelected 
                                   ? const Color(0xFFE50914).withOpacity(0.2)
@@ -366,6 +439,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
                               ] : null,
                             ),
                             child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 Expanded(
                                   child: Text(
@@ -377,8 +451,10 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.left,
                                   ),
                                 ),
+                                const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                   decoration: BoxDecoration(
@@ -405,6 +481,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
                   },
                 );
               },
+              ),
             ),
           ),
         ],
