@@ -3,27 +3,27 @@ import 'package:flutter/services.dart';
 import '../models/channel.dart';
 import 'player_screen.dart';
 import 'home_screen.dart';
-import '../screens/movies_screen.dart';
+import '../screens/channels_screen.dart';
 import '../screens/series_screen.dart';
 
-class ChannelsScreen extends StatefulWidget {
+class MoviesScreen extends StatefulWidget {
   final List<Channel> channels;
   final String title;
 
-  const ChannelsScreen({
+  const MoviesScreen({
     super.key,
     required this.channels,
     required this.title,
   });
 
   @override
-  State<ChannelsScreen> createState() => _ChannelsScreenState();
+  State<MoviesScreen> createState() => _MoviesScreenState();
 }
 
-class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStateMixin {
+class _MoviesScreenState extends State<MoviesScreen> with TickerProviderStateMixin {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-  String _selectedTab = 'Live TV';
+  String _selectedTab = 'Movies';
   String _selectedGroup = '';
   Channel? _selectedChannel;
   final ScrollController _groupScrollController = ScrollController();
@@ -31,7 +31,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
   late AnimationController _focusAnimationController;
   late Animation<double> _focusAnimation;
   
-  // State caching
+  // State caching for Movies
   static String? _cachedSelectedGroup;
   static Channel? _cachedSelectedChannel;
   static double _cachedGroupScrollPosition = 0.0;
@@ -48,7 +48,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
       CurvedAnimation(parent: _focusAnimationController, curve: Curves.easeInOut),
     );
     
-    // Restore cached state or initialize with first group and channel
+    // Auto-load Movies group or restore cached state
     if (_cachedSelectedGroup != null && _groupedChannels.containsKey(_cachedSelectedGroup)) {
       _selectedGroup = _cachedSelectedGroup!;
       if (_cachedSelectedChannel != null) {
@@ -59,11 +59,26 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
           _selectedChannel = groupChannels.first;
         }
       }
-    } else if (_groupedChannels.isNotEmpty) {
-      _selectedGroup = _groupedChannels.keys.first;
-      final groupChannels = _groupedChannels[_selectedGroup]!;
-      if (groupChannels.isNotEmpty) {
-        _selectedChannel = groupChannels.first;
+    } else {
+      // Auto-load Movies group
+      final moviesGroups = _groupedChannels.keys.where((group) => 
+        group.toLowerCase().contains('movie') || 
+        group.toLowerCase().contains('film') ||
+        group.toLowerCase().contains('cinema')
+      ).toList();
+      
+      if (moviesGroups.isNotEmpty) {
+        _selectedGroup = moviesGroups.first;
+        final groupChannels = _groupedChannels[_selectedGroup]!;
+        if (groupChannels.isNotEmpty) {
+          _selectedChannel = groupChannels.first;
+        }
+      } else if (_groupedChannels.isNotEmpty) {
+        _selectedGroup = _groupedChannels.keys.first;
+        final groupChannels = _groupedChannels[_selectedGroup]!;
+        if (groupChannels.isNotEmpty) {
+          _selectedChannel = groupChannels.first;
+        }
       }
     }
     
@@ -197,8 +212,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Navigation Tabs - evenly spaced
-            Expanded(
-              flex: 6,
+            Flexible(
+              flex: 3,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -213,8 +228,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
             const SizedBox(width: 24),
             
             // Search Bar - responsive width
-            Expanded(
-              flex: 3,
+            Flexible(
+              flex: 1,
               child: Container(
                 height: 40,
                 constraints: BoxConstraints(
@@ -240,7 +255,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
                   controller: _searchController,
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
-                    hintText: 'Search channels...',
+                    hintText: 'Search movies...',
                     hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
                     prefixIcon: Icon(
                       Icons.search, 
@@ -335,13 +350,13 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
           MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
         break;
-      case 'Movies':
+      case 'Live TV':
         // Cache current state before navigating
         _cacheCurrentState();
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => MoviesScreen(channels: widget.channels, title: 'Movies'),
+            builder: (context) => ChannelsScreen(channels: widget.channels, title: 'Live TV'),
           ),
         );
         break;
@@ -355,8 +370,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
           ),
         );
         break;
-      case 'Live TV':
-        // Already on Live TV screen, just update state
+      case 'Movies':
+        // Already on Movies screen, just update state
         setState(() {
           _selectedTab = title;
         });
@@ -409,8 +424,6 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
   }
 
   Widget _buildGroupPanel() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
@@ -575,7 +588,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
           Padding(
             padding: const EdgeInsets.all(20),
             child: Text(
-              _selectedGroup.isNotEmpty ? _selectedGroup : 'All Channels',
+              _selectedGroup.isNotEmpty ? _selectedGroup : 'All Movies',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -693,7 +706,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          'Live • ${channel.group}',
+                                          'Movie • ${channel.group}',
                                           style: TextStyle(
                                             color: Colors.white.withOpacity(0.6),
                                             fontSize: 12,
@@ -799,12 +812,12 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
                       height: 80,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.tv, color: Colors.white, size: 80);
+                        return const Icon(Icons.movie, color: Colors.white, size: 80);
                       },
                     ),
                   )
                 else
-                  const Icon(Icons.tv, color: Colors.white, size: 80),
+                  const Icon(Icons.movie, color: Colors.white, size: 80),
                 const SizedBox(height: 16),
                 Text(
                   channel.name,
@@ -861,13 +874,13 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.tv_off,
+            Icons.movie_outlined,
             color: Colors.white.withOpacity(0.5),
             size: 64,
           ),
           const SizedBox(height: 16),
           Text(
-            'Select a channel to preview',
+            'Select a movie to preview',
             style: TextStyle(
               color: Colors.white.withOpacity(0.7),
               fontSize: 16,
@@ -884,9 +897,9 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            _selectedChannel?.name ?? 'Select a channel',
-            style: TextStyle(
+          Text(
+            _selectedChannel?.name ?? 'Select a movie',
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -896,10 +909,10 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
           
           Expanded(
             child: _selectedChannel != null
-                ? _buildEPGList()
+                ? _buildMovieInfo()
                 : Center(
                     child: Text(
-                      'Select a channel to view program guide',
+                      'Select a movie to view details',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.6),
                         fontSize: 14,
@@ -912,72 +925,47 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildEPGList() {
-    // Mock EPG data - in real app, this would come from EPG service
-    final programs = [
-      {'time': '20:00', 'title': 'Evening News', 'current': true},
-      {'time': '21:00', 'title': 'Prime Time Movie', 'current': false},
-      {'time': '23:00', 'title': 'Late Night Show', 'current': false},
-      {'time': '00:30', 'title': 'Documentary', 'current': false},
+  Widget _buildMovieInfo() {
+    // Mock movie info - in real app, this would come from movie metadata
+    final movieInfo = [
+      {'label': 'Genre', 'value': 'Action, Adventure'},
+      {'label': 'Duration', 'value': '2h 15min'},
+      {'label': 'Year', 'value': '2023'},
+      {'label': 'Rating', 'value': '8.5/10'},
     ];
 
     return ListView.builder(
-      itemCount: programs.length,
+      itemCount: movieInfo.length,
       itemBuilder: (context, index) {
-        final program = programs[index];
-        final isCurrent = program['current'] as bool;
+        final info = movieInfo[index];
         
         return Container(
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: isCurrent 
-                ? const Color(0xFFE50914).withOpacity(0.2)
-                : Colors.transparent,
+            color: Colors.white.withOpacity(0.05),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isCurrent 
-                  ? const Color(0xFFE50914)
-                  : Colors.transparent,
-            ),
           ),
           child: Row(
             children: [
               Text(
-                program['time'] as String,
+                info['label'] as String,
                 style: TextStyle(
-                  color: isCurrent ? const Color(0xFFE50914) : Colors.white.withOpacity(0.8),
+                  color: Colors.white.withOpacity(0.8),
                   fontSize: 14,
-                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  program['title'] as String,
+                  info['value'] as String,
                   style: TextStyle(
-                    color: isCurrent ? Colors.white : Colors.white.withOpacity(0.8),
+                    color: Colors.white.withOpacity(0.8),
                     fontSize: 14,
-                    fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
                   ),
                 ),
               ),
-              if (isCurrent)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE50914),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'LIVE',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
             ],
           ),
         );
@@ -990,11 +978,11 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
       children: [
         Expanded(
           child: _buildActionButton(
-            'Catch Up',
-            Icons.history,
-            _selectedChannel?.catchupUrl != null,
+            'Watch Later',
+            Icons.watch_later,
+            true,
             () {
-              // Handle catch up
+              // Handle watch later
             },
           ),
         ),
@@ -1074,7 +1062,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
         color: Colors.grey[700],
         borderRadius: BorderRadius.circular(8),
       ),
-      child: const Icon(Icons.tv, color: Colors.white, size: 24),
+      child: const Icon(Icons.movie, color: Colors.white, size: 24),
     );
   }
 
@@ -1084,13 +1072,13 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.tv_off,
+            Icons.movie_outlined,
             size: 64,
             color: Colors.white.withOpacity(0.5),
           ),
           const SizedBox(height: 16),
           Text(
-            'No channels in this group',
+            'No movies in this group',
             style: TextStyle(
               color: Colors.white.withOpacity(0.7),
               fontSize: 18,

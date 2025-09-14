@@ -3,27 +3,27 @@ import 'package:flutter/services.dart';
 import '../models/channel.dart';
 import 'player_screen.dart';
 import 'home_screen.dart';
+import '../screens/channels_screen.dart';
 import '../screens/movies_screen.dart';
-import '../screens/series_screen.dart';
 
-class ChannelsScreen extends StatefulWidget {
+class SeriesScreen extends StatefulWidget {
   final List<Channel> channels;
   final String title;
 
-  const ChannelsScreen({
+  const SeriesScreen({
     super.key,
     required this.channels,
     required this.title,
   });
 
   @override
-  State<ChannelsScreen> createState() => _ChannelsScreenState();
+  State<SeriesScreen> createState() => _SeriesScreenState();
 }
 
-class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStateMixin {
+class _SeriesScreenState extends State<SeriesScreen> with TickerProviderStateMixin {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-  String _selectedTab = 'Live TV';
+  String _selectedTab = 'Series';
   String _selectedGroup = '';
   Channel? _selectedChannel;
   final ScrollController _groupScrollController = ScrollController();
@@ -31,7 +31,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
   late AnimationController _focusAnimationController;
   late Animation<double> _focusAnimation;
   
-  // State caching
+  // State caching for Series
   static String? _cachedSelectedGroup;
   static Channel? _cachedSelectedChannel;
   static double _cachedGroupScrollPosition = 0.0;
@@ -48,7 +48,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
       CurvedAnimation(parent: _focusAnimationController, curve: Curves.easeInOut),
     );
     
-    // Restore cached state or initialize with first group and channel
+    // Auto-load Series group or restore cached state
     if (_cachedSelectedGroup != null && _groupedChannels.containsKey(_cachedSelectedGroup)) {
       _selectedGroup = _cachedSelectedGroup!;
       if (_cachedSelectedChannel != null) {
@@ -59,11 +59,27 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
           _selectedChannel = groupChannels.first;
         }
       }
-    } else if (_groupedChannels.isNotEmpty) {
-      _selectedGroup = _groupedChannels.keys.first;
-      final groupChannels = _groupedChannels[_selectedGroup]!;
-      if (groupChannels.isNotEmpty) {
-        _selectedChannel = groupChannels.first;
+    } else {
+      // Auto-load Series group
+      final seriesGroups = _groupedChannels.keys.where((group) => 
+        group.toLowerCase().contains('series') || 
+        group.toLowerCase().contains('tv show') ||
+        group.toLowerCase().contains('drama') ||
+        group.toLowerCase().contains('show')
+      ).toList();
+      
+      if (seriesGroups.isNotEmpty) {
+        _selectedGroup = seriesGroups.first;
+        final groupChannels = _groupedChannels[_selectedGroup]!;
+        if (groupChannels.isNotEmpty) {
+          _selectedChannel = groupChannels.first;
+        }
+      } else if (_groupedChannels.isNotEmpty) {
+        _selectedGroup = _groupedChannels.keys.first;
+        final groupChannels = _groupedChannels[_selectedGroup]!;
+        if (groupChannels.isNotEmpty) {
+          _selectedChannel = groupChannels.first;
+        }
       }
     }
     
@@ -197,8 +213,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Navigation Tabs - evenly spaced
-            Expanded(
-              flex: 6,
+            Flexible(
+              flex: 3,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -213,8 +229,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
             const SizedBox(width: 24),
             
             // Search Bar - responsive width
-            Expanded(
-              flex: 3,
+            Flexible(
+              flex: 1,
               child: Container(
                 height: 40,
                 constraints: BoxConstraints(
@@ -240,7 +256,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
                   controller: _searchController,
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
-                    hintText: 'Search channels...',
+                    hintText: 'Search series...',
                     hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
                     prefixIcon: Icon(
                       Icons.search, 
@@ -335,6 +351,16 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
           MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
         break;
+      case 'Live TV':
+        // Cache current state before navigating
+        _cacheCurrentState();
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChannelsScreen(channels: widget.channels, title: 'Live TV'),
+          ),
+        );
+        break;
       case 'Movies':
         // Cache current state before navigating
         _cacheCurrentState();
@@ -346,17 +372,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
         );
         break;
       case 'Series':
-        // Cache current state before navigating
-        _cacheCurrentState();
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => SeriesScreen(channels: widget.channels, title: 'Series'),
-          ),
-        );
-        break;
-      case 'Live TV':
-        // Already on Live TV screen, just update state
+        // Already on Series screen, just update state
         setState(() {
           _selectedTab = title;
         });
@@ -409,8 +425,6 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
   }
 
   Widget _buildGroupPanel() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
@@ -575,7 +589,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
           Padding(
             padding: const EdgeInsets.all(20),
             child: Text(
-              _selectedGroup.isNotEmpty ? _selectedGroup : 'All Channels',
+              _selectedGroup.isNotEmpty ? _selectedGroup : 'All Series',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -693,7 +707,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          'Live • ${channel.group}',
+                                          'Series • ${channel.group}',
                                           style: TextStyle(
                                             color: Colors.white.withOpacity(0.6),
                                             fontSize: 12,
@@ -861,13 +875,13 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.tv_off,
+            Icons.tv_outlined,
             color: Colors.white.withOpacity(0.5),
             size: 64,
           ),
           const SizedBox(height: 16),
           Text(
-            'Select a channel to preview',
+            'Select a series to preview',
             style: TextStyle(
               color: Colors.white.withOpacity(0.7),
               fontSize: 16,
@@ -884,9 +898,9 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            _selectedChannel?.name ?? 'Select a channel',
-            style: TextStyle(
+          Text(
+            _selectedChannel?.name ?? 'Select a series',
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -896,10 +910,10 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
           
           Expanded(
             child: _selectedChannel != null
-                ? _buildEPGList()
+                ? _buildSeriesInfo()
                 : Center(
                     child: Text(
-                      'Select a channel to view program guide',
+                      'Select a series to view details',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.6),
                         fontSize: 14,
@@ -912,72 +926,47 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildEPGList() {
-    // Mock EPG data - in real app, this would come from EPG service
-    final programs = [
-      {'time': '20:00', 'title': 'Evening News', 'current': true},
-      {'time': '21:00', 'title': 'Prime Time Movie', 'current': false},
-      {'time': '23:00', 'title': 'Late Night Show', 'current': false},
-      {'time': '00:30', 'title': 'Documentary', 'current': false},
+  Widget _buildSeriesInfo() {
+    // Mock series info - in real app, this would come from series metadata
+    final seriesInfo = [
+      {'label': 'Genre', 'value': 'Drama, Thriller'},
+      {'label': 'Seasons', 'value': '5 Seasons'},
+      {'label': 'Episodes', 'value': '60 Episodes'},
+      {'label': 'Rating', 'value': '9.2/10'},
     ];
 
     return ListView.builder(
-      itemCount: programs.length,
+      itemCount: seriesInfo.length,
       itemBuilder: (context, index) {
-        final program = programs[index];
-        final isCurrent = program['current'] as bool;
+        final info = seriesInfo[index];
         
         return Container(
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: isCurrent 
-                ? const Color(0xFFE50914).withOpacity(0.2)
-                : Colors.transparent,
+            color: Colors.white.withOpacity(0.05),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isCurrent 
-                  ? const Color(0xFFE50914)
-                  : Colors.transparent,
-            ),
           ),
           child: Row(
             children: [
               Text(
-                program['time'] as String,
+                info['label'] as String,
                 style: TextStyle(
-                  color: isCurrent ? const Color(0xFFE50914) : Colors.white.withOpacity(0.8),
+                  color: Colors.white.withOpacity(0.8),
                   fontSize: 14,
-                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  program['title'] as String,
+                  info['value'] as String,
                   style: TextStyle(
-                    color: isCurrent ? Colors.white : Colors.white.withOpacity(0.8),
+                    color: Colors.white.withOpacity(0.8),
                     fontSize: 14,
-                    fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
                   ),
                 ),
               ),
-              if (isCurrent)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE50914),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'LIVE',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
             ],
           ),
         );
@@ -990,11 +979,11 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
       children: [
         Expanded(
           child: _buildActionButton(
-            'Catch Up',
-            Icons.history,
-            _selectedChannel?.catchupUrl != null,
+            'Watch List',
+            Icons.playlist_add,
+            true,
             () {
-              // Handle catch up
+              // Handle watch list
             },
           ),
         ),
@@ -1084,13 +1073,13 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.tv_off,
+            Icons.tv_outlined,
             size: 64,
             color: Colors.white.withOpacity(0.5),
           ),
           const SizedBox(height: 16),
           Text(
-            'No channels in this group',
+            'No series in this group',
             style: TextStyle(
               color: Colors.white.withOpacity(0.7),
               fontSize: 18,
