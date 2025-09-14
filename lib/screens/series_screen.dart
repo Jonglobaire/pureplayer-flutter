@@ -1297,8 +1297,6 @@ class _SeriesScreenState extends State<SeriesScreen>
           ),
         ),
       ),
-    );
-  }
 
   @override
   void dispose() {
