@@ -28,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = false;
   Timer? _clockTimer;
   String _currentTime = '';
+  List<Channel> _allChannels = [];
 
   @override
   void initState() {
@@ -639,10 +640,18 @@ class _HomeScreenState extends State<HomeScreen> {
       case 1: // Movies
         setState(() => _isLoading = true);
         if (await _checkPlaylistAndShowError()) {
+          final playlistUrl = await _resolveSavedPlaylistUrl();
+          if (playlistUrl != null) {
+            try {
+              _allChannels = await M3UParser.fetchAndParseM3U(playlistUrl);
+            } catch (e) {
+              _allChannels = [];
+            }
+          }
           await Future.delayed(const Duration(seconds: 1));
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const MoviesScreen()),
+            MaterialPageRoute(builder: (context) => MoviesScreen(channels: _allChannels, title: 'Movies')),
           );
         }
         setState(() => _isLoading = false);
@@ -650,10 +659,18 @@ class _HomeScreenState extends State<HomeScreen> {
       case 2: // Series
         setState(() => _isLoading = true);
         if (await _checkPlaylistAndShowError()) {
+          final playlistUrl = await _resolveSavedPlaylistUrl();
+          if (playlistUrl != null) {
+            try {
+              _allChannels = await M3UParser.fetchAndParseM3U(playlistUrl);
+            } catch (e) {
+              _allChannels = [];
+            }
+          }
           await Future.delayed(const Duration(seconds: 1));
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const SeriesScreen()),
+            MaterialPageRoute(builder: (context) => SeriesScreen(channels: _allChannels, title: 'Series')),
           );
         }
         setState(() => _isLoading = false);

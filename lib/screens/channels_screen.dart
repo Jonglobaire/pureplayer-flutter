@@ -884,7 +884,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> with TickerProviderStat
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             _selectedChannel?.name ?? 'Select a channel',
             style: TextStyle(
               color: Colors.white,
