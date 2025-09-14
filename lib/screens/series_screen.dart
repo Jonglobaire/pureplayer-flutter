@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
 import '../models/channel.dart';
@@ -55,6 +56,13 @@ class _SeriesScreenState extends State<SeriesScreen>
   @override
   void initState() {
     super.initState();
+    
+    // Enable profiling in debug mode
+    if (kDebugMode) {
+      debugProfileBuildsEnabled = true;
+      debugProfilePaintsEnabled = true;
+    }
+    
     _focusAnimationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -181,15 +189,21 @@ class _SeriesScreenState extends State<SeriesScreen>
   }
 
   void _preloadImages() {
-    for (int i = 0; i < _currentGroupSeries.length && i < 10; i++) {
+    final startTime = DateTime.now();
+    for (int i = 0; i < _currentGroupSeries.length && i < 20; i++) {
       final series = _currentGroupSeries[i];
       if (series.logo.isNotEmpty) {
         precacheImage(CachedNetworkImageProvider(series.logo), context);
       }
     }
+    if (kDebugMode) {
+      final loadTime = DateTime.now().difference(startTime).inMilliseconds;
+      debugPrint('🖼️ Series: Preloaded images in ${loadTime}ms');
+    }
   }
 
   void _showSeriesModal(Channel series) {
+    final startTime = DateTime.now();
     final episodes = _getSeriesEpisodes(series);
     
     showGeneralDialog(
@@ -202,18 +216,26 @@ class _SeriesScreenState extends State<SeriesScreen>
         return Center(
           child: Material(
             color: Colors.transparent,
-            child: AnimatedScale(
-              scale: animation.value,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-              child: FadeTransition(
-                opacity: animation,
-                child: _buildSeriesModal(series, episodes),
+            child: Hero(
+              tag: 'series_${series.url}',
+              child: AnimatedScale(
+                scale: animation.value,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                child: FadeTransition(
+                  opacity: animation,
+                  child: _buildSeriesModal(series, episodes),
+                ),
               ),
             ),
           ),
         );
       },
+    ).then((_) {
+      if (kDebugMode) {
+        final openTime = DateTime.now().difference(startTime).inMilliseconds;
+        debugPrint('📺 Series: Modal opened in ${openTime}ms');
+      }
     );
   }
 
@@ -956,12 +978,30 @@ class _SeriesScreenState extends State<SeriesScreen>
               ),
             ),
           ),
-          child: const Text(
-            'Series Categories',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.1),
+                width: 1,
+              ),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.category, color: Color(0xFFE50914), size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Series Categories',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -985,7 +1025,20 @@ class _SeriesScreenState extends State<SeriesScreen>
                     itemBuilder: (context, index) {
                       final group = _seriesGroups[index];
                       final isSelected = _selectedGroup == group;
-                      final seriesCount = _filteredSeries.where((s) => s.group == group).length;
+                      
+                      int seriesCount;
+                      if (group == '⭐ Favorites') {
+                        seriesCount = _filteredSeries.where((s) => _contentProvider.isFavorite(s.url)).length;
+                      } else if (group == '⏳ Last Watched') {
+                        seriesCount = _contentProvider.getRecentlyWatched().where((s) => 
+                          s.group.toLowerCase().contains('series') || 
+                          s.group.toLowerCase().contains('tv show') ||
+                          s.group.toLowerCase().contains('drama') ||
+                          s.group.toLowerCase().contains('show')
+                        ).length;
+                      } else {
+                        seriesCount = _filteredSeries.where((s) => s.group == group).length;
+                      }
                       
                       return Container(
                         key: ValueKey('group_$group'),
@@ -1085,43 +1138,25 @@ class _SeriesScreenState extends State<SeriesScreen>
     // Preload images for smooth scrolling
     WidgetsBinding.instance.addPostFrameCallback((_) => _preloadImages());
 
-    return PageStorage(
-      bucket: PageStorageBucket(),
-      child: Scrollbar(
-        controller: _gridScrollController,
-        thumbVisibility: false,
-        child: SingleChildScrollView(
-          key: const PageStorageKey('series_grid'),
+    return RepaintBoundary(
+      child: PageStorage(
+        bucket: PageStorageBucket(),
+        child: Scrollbar(
           controller: _gridScrollController,
-          padding: const EdgeInsets.all(20),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // Responsive grid calculation
-              int crossAxisCount;
-              if (constraints.maxWidth > 1200) {
-                crossAxisCount = 4;
-              } else if (constraints.maxWidth > 800) {
-                crossAxisCount = 3;
-              } else {
-                crossAxisCount = 2;
-              }
-
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  childAspectRatio: 16 / 9,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 20,
-                ),
-                itemCount: _currentGroupSeries.length,
-                itemBuilder: (context, index) {
-                  final series = _currentGroupSeries[index];
-                  return _buildSeriesCard(series, index);
-                },
-              );
-            },
+          thumbVisibility: false,
+          child: GridView.count(
+            key: const PageStorageKey('series_grid'),
+            controller: _gridScrollController,
+            crossAxisCount: 4,
+            childAspectRatio: 2/3,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 20,
+            padding: const EdgeInsets.all(20),
+            children: _currentGroupSeries.asMap().entries.map((entry) {
+              final index = entry.key;
+              final series = entry.value;
+              return _buildSeriesCard(series, index);
+            }).toList(),
           ),
         ),
       ),
@@ -1131,89 +1166,137 @@ class _SeriesScreenState extends State<SeriesScreen>
   Widget _buildSeriesCard(Channel series, int index) {
     final progress = _contentProvider.getWatchProgress(series.url);
     final isPartiallyWatched = _contentProvider.isPartiallyWatched(series.url);
+    final isFavorite = _contentProvider.isFavorite(series.url);
     
-    return Material(
+    return RepaintBoundary(
       key: ValueKey('series_${series.url}'),
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _showSeriesModal(series),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showSeriesModal(series),
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedScale(
+            scale: 1.0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Series Poster
-              Expanded(
-                flex: 4,
-                child: Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: series.logo.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: series.logo,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  color: Colors.grey[800],
-                                  child: const Center(
-                                    child: CircularProgressIndicator(
-                                      color: Color(0xFFE50914),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Series Poster
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        Hero(
+                          tag: 'series_${series.url}',
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                            child: AspectRatio(
+                              aspectRatio: 2/3,
+                              child: series.logo.isNotEmpty
+                                  ? CachedNetworkImage(
+                                      imageUrl: series.logo,
+                                      fit: BoxFit.cover,
+                                      fadeInDuration: const Duration(milliseconds: 300),
+                                      memCacheHeight: 600,
+                                      memCacheWidth: 400,
+                                      placeholder: (context, url) => Container(
+                                        color: Colors.grey[800],
+                                        child: const Center(
+                                          child: CircularProgressIndicator(
+                                            color: Color(0xFFE50914),
+                                          ),
+                                        ),
+                                      ),
+                                      errorWidget: (context, url, error) => _buildDefaultPoster(),
                                     ),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => _buildDefaultPoster(),
-                              )
-                            : _buildDefaultPoster(),
-                      ),
-                    ),
-                    
-                    // Progress indicator
-                    if (isPartiallyWatched)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE50914),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '${(progress * 100).toInt()}%',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                                  )
+                                  : _buildDefaultPoster(),
                             ),
                           ),
                         ),
+                        
+                        // Favorite button overlay
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: GestureDetector(
+                            onTap: () async {
+                              await _contentProvider.toggleFavorite(series.url);
+                              setState(() {});
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Icon(
+                                isFavorite ? Icons.favorite : Icons.favorite_border,
+                                color: isFavorite ? const Color(0xFFE50914) : Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ),
+                        
+                        // Progress indicator
+                        if (isPartiallyWatched)
+                          Positioned(
+                            bottom: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE50914),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '${(progress * 100).toInt()}%',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Series Title
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+                    ),
+                    child: Text(
+                      series.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
-                  ],
-                ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
               ),
-              
-              // Series Title
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1A1A1A),
-                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
-                ),
-                child: _buildHighlightedText(series.name, _searchQuery),
-              ),
-            ],
+            ),
           ),
         ),
       ),

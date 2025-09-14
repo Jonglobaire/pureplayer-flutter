@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
 import '../models/channel.dart';
@@ -55,6 +56,13 @@ class _MoviesScreenState extends State<MoviesScreen>
   @override
   void initState() {
     super.initState();
+    
+    // Enable profiling in debug mode
+    if (kDebugMode) {
+      debugProfileBuildsEnabled = true;
+      debugProfilePaintsEnabled = true;
+    }
+    
     _focusAnimationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
@@ -179,15 +187,21 @@ class _MoviesScreenState extends State<MoviesScreen>
   }
 
   void _preloadImages() {
-    for (int i = 0; i < _currentGroupMovies.length && i < 10; i++) {
+    final startTime = DateTime.now();
+    for (int i = 0; i < _currentGroupMovies.length && i < 20; i++) {
       final movie = _currentGroupMovies[i];
       if (movie.logo.isNotEmpty) {
         precacheImage(CachedNetworkImageProvider(movie.logo), context);
       }
     }
+    if (kDebugMode) {
+      final loadTime = DateTime.now().difference(startTime).inMilliseconds;
+      debugPrint('🖼️ Movies: Preloaded images in ${loadTime}ms');
+    }
   }
 
   void _showMovieModal(Channel movie) {
+    final startTime = DateTime.now();
     final progress = _contentProvider.getWatchProgress(movie.url);
     final isPartiallyWatched = _contentProvider.isPartiallyWatched(movie.url);
     
@@ -201,18 +215,26 @@ class _MoviesScreenState extends State<MoviesScreen>
         return Center(
           child: Material(
             color: Colors.transparent,
-            child: AnimatedScale(
-              scale: animation.value,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-              child: FadeTransition(
-                opacity: animation,
-                child: _buildMovieModal(movie, progress, isPartiallyWatched),
+            child: Hero(
+              tag: 'movie_${movie.url}',
+              child: AnimatedScale(
+                scale: animation.value,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                child: FadeTransition(
+                  opacity: animation,
+                  child: _buildMovieModal(movie, progress, isPartiallyWatched),
+                ),
               ),
             ),
           ),
         );
       },
+    ).then((_) {
+      if (kDebugMode) {
+        final openTime = DateTime.now().difference(startTime).inMilliseconds;
+        debugPrint('🎬 Movies: Modal opened in ${openTime}ms');
+      }
     );
   }
 
@@ -830,12 +852,30 @@ class _MoviesScreenState extends State<MoviesScreen>
               ),
             ),
           ),
-          child: const Text(
-            'Movie Categories',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.1),
+                width: 1,
+              ),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.video_collection, color: Color(0xFFE50914), size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Movie Categories',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -859,7 +899,19 @@ class _MoviesScreenState extends State<MoviesScreen>
                     itemBuilder: (context, index) {
                       final group = _movieGroups[index];
                       final isSelected = _selectedGroup == group;
-                      final movieCount = _filteredMovies.where((m) => m.group == group).length;
+                      
+                      int movieCount;
+                      if (group == '⭐ Favorites') {
+                        movieCount = _filteredMovies.where((m) => _contentProvider.isFavorite(m.url)).length;
+                      } else if (group == '⏳ Last Watched') {
+                        movieCount = _contentProvider.getRecentlyWatched().where((m) => 
+                          m.group.toLowerCase().contains('movie') || 
+                          m.group.toLowerCase().contains('film') ||
+                          m.group.toLowerCase().contains('cinema')
+                        ).length;
+                      } else {
+                        movieCount = _filteredMovies.where((m) => m.group == group).length;
+                      }
                       
                       return Container(
                         key: ValueKey('group_$group'),
@@ -959,43 +1011,25 @@ class _MoviesScreenState extends State<MoviesScreen>
     // Preload images for smooth scrolling
     WidgetsBinding.instance.addPostFrameCallback((_) => _preloadImages());
 
-    return PageStorage(
-      bucket: PageStorageBucket(),
-      child: Scrollbar(
-        controller: _gridScrollController,
-        thumbVisibility: false,
-        child: SingleChildScrollView(
-          key: const PageStorageKey('movies_grid'),
+    return RepaintBoundary(
+      child: PageStorage(
+        bucket: PageStorageBucket(),
+        child: Scrollbar(
           controller: _gridScrollController,
-          padding: const EdgeInsets.all(20),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // Responsive grid calculation
-              int crossAxisCount;
-              if (constraints.maxWidth > 1200) {
-                crossAxisCount = 4;
-              } else if (constraints.maxWidth > 800) {
-                crossAxisCount = 3;
-              } else {
-                crossAxisCount = 2;
-              }
-
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  childAspectRatio: 16 / 9,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 20,
-                ),
-                itemCount: _currentGroupMovies.length,
-                itemBuilder: (context, index) {
-                  final movie = _currentGroupMovies[index];
-                  return _buildMovieCard(movie, index);
-                },
-              );
-            },
+          thumbVisibility: false,
+          child: GridView.count(
+            key: const PageStorageKey('movies_grid'),
+            controller: _gridScrollController,
+            crossAxisCount: 4,
+            childAspectRatio: 2/3,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 20,
+            padding: const EdgeInsets.all(20),
+            children: _currentGroupMovies.asMap().entries.map((entry) {
+              final index = entry.key;
+              final movie = entry.value;
+              return _buildMovieCard(movie, index);
+            }).toList(),
           ),
         ),
       ),
@@ -1005,89 +1039,137 @@ class _MoviesScreenState extends State<MoviesScreen>
   Widget _buildMovieCard(Channel movie, int index) {
     final progress = _contentProvider.getWatchProgress(movie.url);
     final isPartiallyWatched = _contentProvider.isPartiallyWatched(movie.url);
+    final isFavorite = _contentProvider.isFavorite(movie.url);
     
-    return Material(
+    return RepaintBoundary(
       key: ValueKey('movie_${movie.url}'),
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _showMovieModal(movie),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showMovieModal(movie),
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedScale(
+            scale: 1.0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Movie Poster
-              Expanded(
-                flex: 4,
-                child: Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: movie.logo.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: movie.logo,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  color: Colors.grey[800],
-                                  child: const Center(
-                                    child: CircularProgressIndicator(
-                                      color: Color(0xFFE50914),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Movie Poster
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        Hero(
+                          tag: 'movie_${movie.url}',
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                            child: AspectRatio(
+                              aspectRatio: 2/3,
+                              child: movie.logo.isNotEmpty
+                                  ? CachedNetworkImage(
+                                      imageUrl: movie.logo,
+                                      fit: BoxFit.cover,
+                                      fadeInDuration: const Duration(milliseconds: 300),
+                                      memCacheHeight: 600,
+                                      memCacheWidth: 400,
+                                      placeholder: (context, url) => Container(
+                                        color: Colors.grey[800],
+                                        child: const Center(
+                                          child: CircularProgressIndicator(
+                                            color: Color(0xFFE50914),
+                                          ),
+                                        ),
+                                      ),
+                                      errorWidget: (context, url, error) => _buildDefaultPoster(),
                                     ),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => _buildDefaultPoster(),
-                              )
-                            : _buildDefaultPoster(),
-                      ),
-                    ),
-                    
-                    // Progress indicator
-                    if (isPartiallyWatched)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE50914),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '${(progress * 100).toInt()}%',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                                  )
+                                  : _buildDefaultPoster(),
                             ),
                           ),
                         ),
+                        
+                        // Favorite button overlay
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: GestureDetector(
+                            onTap: () async {
+                              await _contentProvider.toggleFavorite(movie.url);
+                              setState(() {});
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Icon(
+                                isFavorite ? Icons.favorite : Icons.favorite_border,
+                                color: isFavorite ? const Color(0xFFE50914) : Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ),
+                        
+                        // Progress indicator
+                        if (isPartiallyWatched)
+                          Positioned(
+                            bottom: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE50914),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '${(progress * 100).toInt()}%',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Movie Title
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF1A1A1A),
+                      borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+                    ),
+                    child: Text(
+                      movie.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
-                  ],
-                ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
               ),
-              
-              // Movie Title
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1A1A1A),
-                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
-                ),
-                child: _buildHighlightedText(movie.name, _searchQuery),
-              ),
-            ],
+            ),
           ),
         ),
       ),
