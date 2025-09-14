@@ -111,15 +111,30 @@ class _MoviesScreenState extends State<MoviesScreen>
   }
 
   List<String> get _movieGroups {
-    final groups = <String>{};
+    final groups = <String>['⭐ Favorites', '⏳ Last Watched'];
+    final movieGroups = <String>{};
     for (final movie in _filteredMovies) {
-      groups.add(movie.group);
+      movieGroups.add(movie.group);
     }
-    return groups.toList()..sort();
+    groups.addAll(movieGroups.toList()..sort());
+    return groups;
   }
 
   List<Channel> get _currentGroupMovies {
     if (_selectedGroup.isEmpty) return _filteredMovies;
+    
+    if (_selectedGroup == '⭐ Favorites') {
+      return _filteredMovies.where((movie) => _contentProvider.isFavorite(movie.url)).toList();
+    }
+    
+    if (_selectedGroup == '⏳ Last Watched') {
+      return _contentProvider.getRecentlyWatched().where((movie) => 
+        movie.group.toLowerCase().contains('movie') || 
+        movie.group.toLowerCase().contains('film') ||
+        movie.group.toLowerCase().contains('cinema')
+      ).toList();
+    }
+    
     return _filteredMovies.where((movie) => movie.group == _selectedGroup).toList();
   }
 
@@ -188,6 +203,8 @@ class _MoviesScreenState extends State<MoviesScreen>
             color: Colors.transparent,
             child: AnimatedScale(
               scale: animation.value,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
               child: FadeTransition(
                 opacity: animation,
                 child: _buildMovieModal(movie, progress, isPartiallyWatched),
@@ -241,24 +258,29 @@ class _MoviesScreenState extends State<MoviesScreen>
                   // Movie poster
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: SizedBox(
-                      width: 200,
-                      height: 300,
-                      child: movie.logo.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: movie.logo,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: Colors.grey[800],
-                                child: const Center(
-                                  child: CircularProgressIndicator(
-                                    color: Color(0xFFE50914),
+                    child: AspectRatio(
+                      aspectRatio: 2/3,
+                      child: SizedBox(
+                        width: 200,
+                        child: movie.logo.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: movie.logo,
+                                fit: BoxFit.cover,
+                                fadeInDuration: const Duration(milliseconds: 300),
+                                memCacheHeight: 600,
+                                memCacheWidth: 400,
+                                placeholder: (context, url) => Container(
+                                  color: Colors.grey[800],
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                      color: Color(0xFFE50914),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              errorWidget: (context, url, error) => _buildDefaultPoster(),
-                            )
-                          : _buildDefaultPoster(),
+                                errorWidget: (context, url, error) => _buildDefaultPoster(),
+                              )
+                            : _buildDefaultPoster(),
+                      ),
                     ),
                   ),
                   
@@ -360,38 +382,27 @@ class _MoviesScreenState extends State<MoviesScreen>
                               ),
                             ),
                             
-                            if (isPartiallyWatched) ...[
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    _playMovie(movie, fromStart: false);
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.white.withOpacity(0.2),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                  icon: const Icon(Icons.play_circle_outline),
-                                  label: const Text('Continue Watching'),
+                            const SizedBox(width: 12),
+                            
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: isPartiallyWatched ? () {
+                                  Navigator.pop(context);
+                                  _playMovie(movie, fromStart: false);
+                                } : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isPartiallyWatched 
+                                      ? Colors.white.withOpacity(0.2)
+                                      : Colors.grey.withOpacity(0.3),
+                                  foregroundColor: isPartiallyWatched 
+                                      ? Colors.white 
+                                      : Colors.grey,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
                                 ),
+                                icon: const Icon(Icons.play_circle_outline),
+                                label: const Text('Continue Watching'),
                               ),
-                            ] else ...[
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: null,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.grey.withOpacity(0.3),
-                                    foregroundColor: Colors.grey,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                  icon: const Icon(Icons.play_circle_outline),
-                                  label: const Text('Continue Watching'),
-                                ),
-                              ),
-                            ],
+                            ),
                           ],
                         ),
                       ],

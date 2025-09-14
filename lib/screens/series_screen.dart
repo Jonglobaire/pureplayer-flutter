@@ -188,6 +188,8 @@ class _SeriesScreenState extends State<SeriesScreen>
             color: Colors.transparent,
             child: AnimatedScale(
               scale: animation.value,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
               child: FadeTransition(
                 opacity: animation,
                 child: _buildSeriesModal(series, episodes),
